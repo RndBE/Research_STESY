@@ -11,8 +11,8 @@ app = Flask(__name__)
 CORS(app)
 
 # === Konfigurasi model ===
-BERT_MODEL_PATH = "C:/Users/fadel/OneDrive/Pictures/temporare/_new_model_v210525/intent_model"
-LABEL_ENCODER_PATH = "C:/Users/fadel/OneDrive/Pictures/temporare/_new_model_v210525/label_encoder.pkl"
+BERT_MODEL_PATH = "_new_model/intent_model"
+LABEL_ENCODER_PATH = "_new_model/label_encoder.pkl"
 
 @app.route("/chat", methods=["POST"])
 def chat_endpoint():

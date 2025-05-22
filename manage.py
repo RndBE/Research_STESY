@@ -323,7 +323,8 @@ class IntentManager:
             "show_selected_parameter": self.show_selected_parameter,
             "get_logger_photo_path": self.get_photo_path,
             "how_it_works": self.explain_system,
-            "analyze_logger_by_date": self.analyze_by_date
+            "analyze_logger_by_date": self.analyze_by_date,
+            "ai_limitation": self.smart_respond
         }
 
     def handle_intent(self):
@@ -444,6 +445,12 @@ class IntentManager:
         result = general_stesy(messages=[summary_prompt])
         self.memory.analysis_result = result
         return result
+
+    def smart_respond(self, **kwargs):
+        # sebuah function yang dapat merespon, merekomendasikan dan menyarankan output.
+        # sebuah function yang dapat memberikan respon jika prompt memiliki struktur yang kurang
+        # sebuah function yang dapat memberikan struktur yang benar sesuai intent nya
+        return None
 
     def fallback_response(self):
         print("Fallback intent dijalankan")
