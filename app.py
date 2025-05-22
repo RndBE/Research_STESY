@@ -8,7 +8,7 @@ from manage import PromptProcessedMemory, IntentManager
 from super_tools import fetch_list_logger  # Ensure this exists or update with correct path
 
 app = Flask(__name__)
-CORS(app)
+CORS(app) # testing GPU
 
 # === Konfigurasi model ===
 BERT_MODEL_PATH = "_new_model/intent_model"
