@@ -447,9 +447,11 @@ class IntentManager:
         return result
 
     def smart_respond(self): # hapus kwargs di function ini
+
         # sebuah function yang dapat merespon, merekomendasikan dan menyarankan output.
         # sebuah function yang dapat memberikan respon jika prompt memiliki struktur yang kurang
         # sebuah function yang dapat memberikan struktur yang benar sesuai intent nya
+        
         return None
 
     def fallback_response(self):

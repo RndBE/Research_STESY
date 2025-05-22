@@ -68,13 +68,13 @@ trainer = Trainer(
 trainer.train()
 
 # ==== 8. Simpan Model dan LabelEncoder ==== _new_model _new_model_v210525
-model.save_pretrained("_new_model_v210525/intent_model")
-tokenizer.save_pretrained("_new_model_v210525/intent_model")
-joblib.dump(le, "_new_model_v210525/label_encoder.pkl")
+model.save_pretrained("_new_model/intent_model")
+tokenizer.save_pretrained("_new_model/intent_model")
+joblib.dump(le, "_new_model/label_encoder.pkl")
 print("\u2705 Model dan LabelEncoder disimpan.")
 
 # ==== 9. Fungsi Memuat Model dan Encoder ====
-def load_model_and_encoder(model_path="_new_model_v210525/intent_model", encoder_path="_new_model_v210525/label_encoder.pkl"):
+def load_model_and_encoder(model_path="_new_model/intent_model", encoder_path="_new_model/label_encoder.pkl"):
     model = BertForSequenceClassification.from_pretrained(model_path)
     tokenizer = BertTokenizer.from_pretrained(model_path)
     label_encoder = joblib.load(encoder_path)
@@ -122,7 +122,8 @@ neo_test_prompts = [
     "Bandingkan curah hujan antar semua logger hari ini.",  # compare_parameter_across_loggers
     "Apakah ada logger mencatat hujan sekarang?",  # fetch_status_rain
     "Apa saja logger yang aktif saat ini?",  # show_list_logger
-    "Jelaskan bagaimana cara kerja sistem STESY."  # how_it_works
+    "Jelaskan bagaimana cara kerja sistem STESY.",  # how_it_works
+    "Siapa itu Nyonya Cream Puff"  # ai_limitation
 ]
 
 print("\n=== PREDIKSI INTENT ===")
