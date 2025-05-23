@@ -51,7 +51,7 @@ print("\u2705 Using device:", device)
 # ==== 6. Trainer Setup ====
 training_args = TrainingArguments(
     output_dir="./results",
-    num_train_epochs=13,
+    num_train_epochs=16,
     per_device_train_batch_size=8,
     logging_dir="./logs",
     logging_steps=10,
