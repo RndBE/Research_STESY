@@ -369,15 +369,6 @@ class IntentManager:
 
         # return f"Berhasil mengambil data terbaru dari {len(fetched)} logger."
 
-        if not fetched:
-            return "Tidak ditemukan data untuk logger yang disebutkan."
-
-        for item in fetched:
-            print(f"\n📍 {item['logger_name']}")
-            for key, value in item['data'].items():
-                print(f"{key}: {value}")
-
-        return f"Berhasil mengambil data terbaru dari {len(fetched)} logger."
 
     def fetch_data_range(self):
         print("fetch_logger_by_date ini telah berjalan")
