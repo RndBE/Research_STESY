@@ -286,7 +286,7 @@ warnings.filterwarnings('ignore')
 import torch
 from transformers import BertTokenizer, BertForSequenceClassification
 import joblib
-from super_tools import original_fetch_data_range, find_and_fetch_latest_data, fetch_list_logger_from_prompt_flexibleV1, original_fetch_status_logger, fetch_list_logger, original_compare_by_date
+from super_tools import original_fetch_data_range, find_and_fetch_latest_data, fetch_list_logger_from_prompt_flexibleV1, original_fetch_status_logger, fetch_list_logger, original_compare_by_date, extract_date_structured
 from super_tools import general_stesy, summarize_logger_data
 
 class IntentHandler:
@@ -487,9 +487,86 @@ class IntentManager:
 
         return response['message']['content']
 
-
     def show_selected_parameter(self):
-        return "Menjalankan show_selected_parameter"
+        print("show_selected_parameter ini telah berjalan")
+        prompt = self.memory.latest_prompt.lower()
+        logger_list = fetch_list_logger()
+
+        if not logger_list:
+            return "Daftar logger tidak tersedia."
+
+        # Deteksi parameter
+        selected_param = None
+        for param_key, aliases in sensor_aliases.items():
+            for alias in aliases:
+                if alias.lower() in prompt:
+                    selected_param = param_key
+                    break
+            if selected_param:
+                break
+
+        if not selected_param:
+            return "Parameter tidak dikenali. Silakan sebutkan suhu udara, kelembaban udara, curah hujan, atau tekanan udara."
+
+        # Deteksi rentang tanggal
+        date_info = extract_date_structured(prompt)
+        print("Extracted date_info:", date_info)
+
+        # Deteksi lokasi (logger)
+        target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
+        print("Target logger:", target_loggers)
+
+        # Jika tidak ada tanggal, anggap permintaan data saat ini
+        if not date_info.get("awal_tanggal") or not date_info.get("akhir_tanggal"):
+            fetched = find_and_fetch_latest_data(target_loggers, logger_list)
+            summaries = []
+            for item in fetched:
+                logger_name = item['logger_name']
+                value = item['data'].get(selected_param, "Data tidak tersedia")
+                summaries.append(f"{logger_name}: {selected_param} = {value}")
+            
+            # Gabungkan data jadi konteks untuk LLaMA
+            context_data = "\n".join(summaries)
+
+            system_prompt = (
+                "Kamu adalah asisten cerdas yang menjawab pertanyaan berdasarkan data logger cuaca. "
+                "Berikan jawaban yang singkat, jelas, dan sesuai dengan permintaan pengguna."
+            )
+
+            # Panggil LLaMA chat dengan konteks data dan pertanyaan asli
+            response = chat(
+                model='llama3.1',
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"{self.memory.latest_prompt}\n\nBerikut data yang tersedia:\n{context_data}"}
+                ]
+            )
+            return response['message']['content']
+
+        # Jika ada rentang tanggal, ambil data range
+        summaries = original_fetch_data_range(
+            prompt=self.memory.latest_prompt,
+            target_loggers=target_loggers,
+            logger_list=logger_list
+        )
+
+        # Bisa juga kirim data ringkas ini ke LLaMA agar jawabannya lebih natural
+        system_prompt = (
+            "Kamu adalah asisten cerdas yang menjawab pertanyaan berdasarkan data logger cuaca. "
+            "Berikan jawaban yang singkat, jelas, dan sesuai dengan permintaan pengguna."
+        )
+        response = chat(
+            model='llama3.1',
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"{self.memory.latest_prompt}\n\nBerikut data yang tersedia:\n{summaries}"}
+            ]
+        )
+        return response['message']['content']
+
+
+
+
 
     def get_photo_path(self):
         return "Menjalankan get_photo_path"
