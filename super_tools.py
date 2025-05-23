@@ -633,7 +633,7 @@ import pandas as pd
 def fetch_list_logger():
     loggers = []
     # Membaca file CSV dengan kolom tambahan yang diperlukan C:/Users/fadel/Downloads/LLMBasedAssistant/EndThis/data/loggers.csv
-    with open("Research_STESY/loggers.csv", newline='', encoding='utf-8') as csvfile: # merubah path loggers.csv
+    with open("loggers.csv", newline='', encoding='utf-8') as csvfile: # merubah path loggers.csv
         reader = csv.DictReader(csvfile)
         for row in reader:
             loggers.append({
