@@ -339,6 +339,8 @@ class IntentManager:
         prompt = self.memory.latest_prompt
 
         print("self.memory.last_logger_list ",self.memory.last_logger_list)
+        print(f"Type data dari self.memory.last_logger_list adalah {type(self.memory.last_logger_list)}")
+        print(f"Panjang data dari self.memory.last_logger_list adalah {len(self.memory.last_logger_list)}")
         print("self.memory.last_logger ",self.memory.last_logger)
 
         target_loggers = self.memory.last_logger_list or [self.memory.last_logger] # Error no
