@@ -555,7 +555,7 @@ def fetch_list_logger_from_prompt_flexibleV1(user_prompt: str): # Function ini s
     if kabupaten:
         df = df[df['kabupaten'].str.lower() == kabupaten.lower()]
 
-    return df # .to_dict(orient='records')
+    return df.to_dict(orient='records')
 
 def fetch_data_range(id_logger, start_date, end_date, interval="hari"):
     url = f"https://dpupesdm.monitoring4system.com/api/data_range?id_logger={id_logger}&interval={interval}&awal={start_date}&akhir={end_date}"
@@ -568,7 +568,7 @@ import pandas as pd
 def fetch_list_logger():
     loggers = []
     # Membaca file CSV dengan kolom tambahan yang diperlukan C:/Users/fadel/Downloads/LLMBasedAssistant/EndThis/data/loggers.csv
-    with open("C:/Users/fadel/Downloads/LLMBasedAssistant/EndThis/data/loggers.csv", newline='', encoding='utf-8') as csvfile:
+    with open("Research_STESY/loggers.csv", newline='', encoding='utf-8') as csvfile: # merubah path loggers.csv
         reader = csv.DictReader(csvfile)
         for row in reader:
             loggers.append({

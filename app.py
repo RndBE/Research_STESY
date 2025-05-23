@@ -44,7 +44,7 @@ def chat_endpoint():
         date_text = intent_info.get("date")
         print(f"Intent adalah : {intent}, target logger adalah : {target}, tanggal yang dicari adalah : {date_text}")
         
-        print("1. latest_user_msg", latest_user_msg)
+        print("1. latest_user_msg", latest_user_msg) 
         print("2. intent_info", intent_info)
         # intent_info
 
