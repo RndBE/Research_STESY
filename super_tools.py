@@ -19,8 +19,8 @@ sensor_aliases = {
     "Kecerahan": ["kecerahan", "brightness", "intensitas cahaya", "tingkat cahaya"],
     "Arah_Cahaya": ["arah cahaya", "light direction", "direction cahaya", "sudut cahaya"],
     "Curah_Hujan_1": ["curah hujan", "rainfall", "hujan"],
-    "Temperatur_Udara": ["temperatur udara", "suhu udara", "air temperature", "udara panas"],
-    "Kelembaban_Udara": ["kelembaban udara", "humidity air", "kadar air udara", "udara lembab"],
+    "Temperatur_Udara": ["temperatur udara", "suhu udara", "air temperature", "udara panas", "temperatur", "udara temperatur", "tingkat panas udara", "derajat suhu", "tingkat suhu", "temperature", "cuaca panas", "suhu lingkungan", "panas udara"],
+    "Kelembaban_Udara": ["kelembaban udara", "humidity air", "kadar air udara", "udara lembab", "kelembaban", "udara kelembaban", "kelembapan", "kelembapan udara", "tingkat kelembaban", "humidity", "kadar kelembaban", "kelembaban lingkungan", "kelembaban relatif", "lembab", "lembap"],
     "Tekanan_Udara": ["tekanan udara", "pressure", "air pressure", "barometer"],
     "Kelembaban_Logger": ["kelembaban logger", "humidity logger", "logger kelembaban", "logger humidity"]
 }
@@ -603,7 +603,7 @@ def fetch_list_logger_from_prompt_flexibleV1(user_prompt: str): # Function ini s
 
     # Baca file CSV
     loggers = [] # 
-    with open("Research_STESY/loggers.csv", newline='', encoding='utf-8') as csvfile:
+    with open("loggers.csv", newline='', encoding='utf-8') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
             loggers.append({

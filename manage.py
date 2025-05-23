@@ -6,6 +6,7 @@ from typing import List, Dict, Optional
 from transformers import BertTokenizer, BertForSequenceClassification
 import torch
 import joblib
+from super_tools import sensor_aliases
 
 MEMORY_DIR = "user_memory"
 
@@ -428,7 +429,64 @@ class IntentManager:
         # return f"Berhasil mengambil data dari {len(fetched)} logger."
 
     def compare_across_loggers(self):
-        return "Menjalankan compare_across_loggers"
+        print("compare_across_loggers ini telah berjalan")
+        prompt = self.memory.latest_prompt.lower()
+        logger_list = fetch_list_logger()
+
+        if not logger_list:
+            return "Daftar logger tidak tersedia."
+
+        # Cek parameter berdasarkan sensor_aliases
+        selected_param = None
+        for param_key, aliases in sensor_aliases.items():
+            for alias in aliases:
+                if alias.lower() in prompt:
+                    selected_param = param_key
+                    break
+            if selected_param:
+                break
+
+        if not selected_param:
+            return (
+                "Parameter yang ingin dibandingkan tidak dikenali. "
+                "Silakan sebutkan seperti suhu udara, kelembaban udara, tekanan udara, atau curah hujan."
+            )
+
+        # Ambil data logger
+        name_fragments = [logger["nama_lokasi"] for logger in logger_list]
+        fetched = find_and_fetch_latest_data(name_fragments, logger_list)
+
+        if not fetched:
+            return "Tidak ditemukan data terbaru untuk logger yang disebutkan."
+
+        # Siapkan data untuk konteks
+        comparison_data = []
+        for item in fetched:
+            logger_name = item["logger_name"]
+            value = item["data"].get(selected_param, "Data tidak tersedia")
+            comparison_data.append(f"{logger_name}: {value}")
+
+        # Prompt sistem
+        system_prompt = (
+            "Kamu adalah asisten cerdas yang menjawab pertanyaan berdasarkan data logger cuaca. "
+            "Berikan jawaban yang singkat, jelas, dan sesuai dengan permintaan pengguna."
+        )
+
+        # Pertanyaan asli dan data perbandingan
+        user_question = self.memory.latest_prompt
+        context_data = "\n".join(comparison_data)
+
+        # Panggil Ollama
+        response = chat(
+            model='llama3.1',
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"{user_question}\n\nBerikut datanya:\n{context_data}"}
+            ]
+        )
+
+        return response['message']['content']
+
 
     def show_selected_parameter(self):
         return "Menjalankan show_selected_parameter"

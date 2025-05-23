@@ -123,7 +123,8 @@ neo_test_prompts = [
     "Apakah ada logger mencatat hujan sekarang?",  # fetch_status_rain
     "Apa saja logger yang aktif saat ini?",  # show_list_logger
     "Jelaskan bagaimana cara kerja sistem STESY.",  # how_it_works
-    "Siapa itu Nyonya Cream Puff"  # ai_limitation
+    "Siapa itu Nyonya Cream Puff",  # ai_limitation
+    "Di mana tekanan udara paling rendah hari ini?"
 ]
 
 print("\n=== PREDIKSI INTENT ===")
