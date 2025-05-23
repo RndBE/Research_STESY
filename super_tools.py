@@ -537,8 +537,8 @@ def fetch_list_logger_from_prompt_flexibleV1(user_prompt: str): # Function ini s
     kabupaten = extract_kabupaten(user_prompt)
 
     # Baca file CSV
-    loggers = []
-    with open("C:/Users/fadel/Downloads/LLMBasedAssistant/EndThis/data/loggers.csv", newline='', encoding='utf-8') as csvfile:
+    loggers = [] # 
+    with open("Research_STESY/loggers.csv", newline='', encoding='utf-8') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
             loggers.append({

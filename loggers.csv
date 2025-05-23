@@ -1,0 +1,42 @@
+id_logger,nama_lokasi,latitude,longitude,alamat,kabupaten
+10001,Pos AWR Kaliurang,-7.595729,110.425064,"Kaliurang, Hargobinangun, Pakem, Sleman",Sleman
+10002,Pos ARR Bronggang,-7.67796,110.45044,"Randusari, Argomulyo, Kec. Cangkringan",Sleman
+10003,Pos ARR Kemput,-7.6438,110.402,"Candibinangun, Kec. Pakem, Kabupaten Sleman",Sleman
+10013,Pos ARR Kali Bawang,-7.661818,110.263764,"Banjaroyo, Kec. Kalibawang",Kulon Progo
+10014,Pos AWLR Seturan,-7.7656850,110.4154120,"Kledokan, Caturtunggal, Kec. Depok",Sleman
+10015,Pos AWLR Papringan,-7.7801170,110.3978600,"Papringan, Caturtunggal, Depok",Sleman
+10016,Pos AWLR Pogung,-7.755671,110.3730760,"Pogung Kidul, Sinduadi, Kec. Mlati",Sleman
+10017,Pos AWLR Sinduadi,-7.744606,110.361930,"Mlati Beningan, Sendangadi, Kec. Mlati",Sleman
+10020,Pos AWLR Bendungan,-7.8883056,110.1418611,"Cokrodapan, Triharjo, Kec. Wates",Kulon Progo
+10021,Pos AWLR Opak Pulo,-7.7483286,110.4885234,"Klurak, Tamanmartani, Kec. Kalasan",Sleman
+10022,Pos AWLR Bantar,-7.8248889,110.2335833,"Kalijoho, Argosari, Kec. Sedayu",Bantul
+10023,Pos AWLR Kedungmiri,-7.952042,110.384549,"Siuk 1, Selopamioro, Kec. Imogiri",Bantul
+10024,Pos AWLR Bunder,-7.892701,110.545518,"Bunder, Kec. Patuk",Gunung Kidul
+10026,Pos ARR Gemawang,-7.7579440,110.3700550,"Jl. Selokan Mataram, Gemawang, Sinduadi, Kec. Mlati",Sleman
+10027,Pos ARR Singkung,-7.7616389,110.1966944,"Kamal, Pendoworejo, Kec. Girimulyo",Kulon Progo
+10028,Pos ARR Sapon,-7.922423,110.255065,"Gerjen, Sidorejo, Kec. Lendah",Kulon Progo
+10029,Pos ARR Hargorejo,-7.8698333,110.11676,"Ngulakan, Hargorejo, Kec. Kokap",Kulon Progo
+10030,Pos ARR Sanden,-7.9539167,110.2678889,"Tunjungan, Caturharjo, Kec. Pandak",Bantul
+10031,Pos ARR Ngawen,-7.8404722,110.674223,"Serut, Beji, Kec. Ngawen",Gunung Kidul
+10032,Pos ARR Angin-Angin,-7.6732778,110.3716389,"Donoasih, Donokerto, Kec. Turi",Sleman
+10033,Pos ARR Seyegan,-7.6960278,110.2931111,"Karang, Banyurejo, Kec. Tempel",Sleman
+10034,Pos ARR Godean,-7.7342778,110.3010278,"Druju Krojan, Margodadi, Kec. Seyegan",Sleman
+10035,Pos ARR Prumpung,-7.70675,110.3926944,"Prumpung, Sardonoharjo, Kec. Ngaglik",Sleman
+10036,Pos ARR Giriwungu,-8.023772,110.4199630,"Pudak, Giriwungu, Kec. Panggang",Sleman
+10037,Pos ARR Borrowarea,-7.817444,110.1167222,"Tegalrejo, Hargowilis, Kec. Kokap",Kulon Progo
+10038,Pos ARR Terong,-7.8883583,110.4607235,"Terong - Dlingo No.2, RT.06/RW.13, Terong II, Terong, Kec. Dlingo",Bantul
+10039,Pos ARR Kedungkeris,-7.8859722,110.6028611,"Sendowo Lor, Kedung Keris, Kec. Nglipar",Gunung Kidul
+10040,Pos AWR Barongan,-7.9091111,110.3732778,"Bungas, Sumberagung, Kec. Jetis",Bantul
+10057,Pos AWLR Pengasih,-7.83539,110.17100,"Kepek, Pengasih, Kec. Pengasih",Kulon Progo
+10058,Pos AWLR Kali Bawang,-7.6574290,110.26300,"Banjaroyo, Kec. Kalibawang",Kulon Progo
+10089,Pos AWLR Wonokromo,-7.868682,110.394745,"Ketongo, Wonokromo, Kec. Pleret",Bantul
+10090,Pos AWLR Sapon,-7.9226287,110.2548718,"Sapon, Sidorejo, Kec. Lendah",Kulon Progo
+10094,Pos AWR Tegal,-7.683646,110.255478,"Ngujon, Banjarharjo, Kec. Kalibawang",Kulon Progo
+10111,Pos ARR Beran,-7.711013,110.361649,"Josari, Tridadi, Kec. Sleman",Sleman
+10112,Pos ARR Gembongan,-7.8568921,110.2112427,"Gembongan, Sukoreno, Kec. Sentolo",Kulon Progo
+10113,Pos ARR Santan,-7.784337,110.4291992,"Karangploso, Maguwoharjo, Kec. Depok",Sleman
+10114,Pos ARR Plataran,-7.7148368,110.4625059,"Plataran, Kiyudan, Selomartani, Kec. Kalasan",Sleman
+10206,Pos ARR Nyemengan,-7.843823786186055,110.34598317543397,"Nyemengan, Tirtonirmolo, Kasihan",Bantul
+10207,Pos ARR Gedhangan,-7.943686,110.683011,"Gedangan II, Gedangrejo, Kec. Karangmojo",Gunung Kidul
+10255,Pos AWR Beji,-7.862512,110.147484,"Jl. Wates - Kedundang, Area Sawah, Wates, Kec. Wates, Kabupaten Kulon Progo",Kulon Progo
+10311,Pos AWLR Gumuk,-7.770430,110.328400,"Besi, Sidoarum, Godean, Sleman ",Sleman

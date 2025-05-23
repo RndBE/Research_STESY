@@ -21,7 +21,7 @@ def chat_endpoint():
     user_messages = payload.get("messages", [])
     user_id = request.remote_addr
 
-    try:
+    try: 
         latest_user_msg = next((m["content"] for m in reversed(user_messages) if m["role"] == "user"), "")
 
         # ✅ Inisialisasi memory dan intent manager

@@ -1,0 +1,200 @@
+COMPANY PROFILE - BEACON ENGINEERING
+
+Tentang Kami:
+PT. Arta Teknologi Comunindo adalah perusahaan manufaktur perangkat keras data logger merek Beacon Engineering dan perangkat lunak STESY (Smart Telemetry Systems), berlokasi di Kabupaten Sleman, Daerah Istimewa Yogyakarta. Didirikan pada tahun 2010, kami telah berkontribusi selama 14 tahun dalam pengembangan teknologi smart monitoring yang profesional dan inovatif untuk kemajuan Indonesia. Produk Beacon Engineering dirancang untuk pengukuran jarak jauh yang otomatis, realtime, online, berkelanjutan, dan akurat di berbagai bidang, termasuk klimatologi, hidrologi, irigasi, geoteknik dan geothermal. Kepercayaan dari berbagai pihak (pemerintah, swasta, dan individu) telah mendorong kami menciptakan solusi smart monitoring yang tersebar di seluruh Indonesia. Dengan pengalaman dan pembelajaran yang konsisten, kami berkomitmen memberikan layanan terbaik untuk memenuhi kebutuhan Anda. Kontak: Website: www.be-jogja.com, Email: info@bejogja.com, Telepon: (0274) 4986899, Alamat: Kadirojo I, Purwomartani, Kec. Kalasan, Kabupaten Sleman, Daerah Istimewa Yogyakarta. PT. Arta Teknologi Comunindo adalah perusahaan berbasis di Yogyakarta yang memegang merek Beacon Engineering. Kami dikenal inovatif, kreatif, dan produktif dalam dua lini bisnis utama: 1.Jasa Implementasi & Perawatan Sistem: Menyediakan solusi telemetri untuk monitoring dan controlling di bidang hidrologi, irigasi, klimatologi, geoteknik dan geothermal, 2.Produksi Perangkat Keras & Lunak: Mengembangkan prosesor DAQ (Data Logger) dan aplikasi web untuk berbagai kebutuhan telemetri, termasuk hidrologi, irigasi, klimatologi, geoteknik dan geothermal. Produk Unggulan Kami: - Sistem Telemetri Monitoring: AWLR (Irigasi & Bendungan), ARR (Curah Hujan), AWR (Klimatologi), AVWR (Vibrating Wire), AGR (Geothermal), AAQR (Kualitas Udara), ASQR (Kualitas Tanah), AWQR (Kualitas Air), EWS (Early Warning System), ADR (Deformasi Bendungan), - Sistem Monitoring & Controlling: AWGC (Pintu Air), - Aplikasi Pintar: STESY Smart Application. VISI: Berperan nyata dalam memajukan bangsa Indonesia melalui upaya profesional dan kreatif dalam pengembangan teknologi telemetri pintar. MISI: 1.Memberikan kualitas produk & layanan terbaik, dengan harga bersaing, 2.Mengelola bisnis berdasarkan SDM yang unggul, menggunakan teknologi terkini, dan membangun kerjasama yang saling menguntungkan, 3.Melakukan riset & inovasi berkelanjutan untuk menghasilkan produk yang sesuai dengan kebutuhan klien. PRODUK DATA LOGGER: - BL-1100 SERIES, - BL-110 SERIES. Perangkat Beacon Logger dari Beacon Engineering adalah data logger berbasis teknologi IoT (Internet of Things) yang mampu melakukan pengukuran jarak jauh secara otomatis, realtime, online, dan berkelanjutan dengan data akurat untuk kebutuhan hidrologi, irigasi, klimatologi, geoteknik, dan geothermal. Sebagai solusi terpercaya, Beacon Logger memiliki fungsi utama: 1.Membaca data dari sensor, 2.Mengolah data sesuai format dan kebutuhan, 3.Menyimpan hasil pengolahan data, 4.Mengirimkan data ke server cloud. Smart Telemetry Systems(STESY): Merupakan solusi telemetri canggih yang mengintegrasikan sistem informasi dan elektronik, dan dikembangkan oleh Beacon Engineering berdasarkan pengamatan dan pengalaman pengguna. STESY andal pada pengukuran sensor, khususnya untuk hidrologi, klimatologi, geoteknik, pemantauan lingkungan (kualitas air, udara, dan tanah), aplikasi panas bumi, dan banyak lagi. Salah satu fitur utama STESY adalah kemampuan menampilkan hasil pengukuran secara real-time dalam bentuk grafik melalui platform pemantauan berbasis web dan aplikasi seluler. Hal ini memudahkan pengguna dalam monitoring data kapan pun dan di mana pun. 
+
+Automatic Flow Meter Recorder(AFMR) adalah Perangkat ini dirancang khusus untuk monitoring otomatis pengukuran aliran air dalam pemantauan jangka panjang Menggunakan BE Data Logger, produk unggulan dari Beacon Engineering, perangkat ini menyediakan pencatatan data yang sangat akurat dan otomatis. Kemampuannya untuk mengukur data dari puluhan sensor secara simultan menjadikannya solusi yang ideal, memberikan fleksibilitas untuk memperluas pengukuran sesuai kebutuhan. Sensor aliran menggunakan mekanisme radar dengan akurasi tinggi (kurang dari 0,02 mm) dan memiliki peringkat IP68, yang memastikan ketahanan terhadap debu dan kotoran serta dapat terendam dalam air untuk durasi tertentu. Casing sensor terbuat dari stainless steel 316, memberikan ketahanan korosi yang sangat baik dan daya tahan yang luar biasa.
+
+AWLR : Automatic Water Level Recorder
+Perangkat ini dirancang khusus sebagai monitoring otomatis untuk water level measurement dan cocok digunakan dalam jangka panjang. Menggunakan BE Data Logger, produk unggulan dari Beacon Engineering, perangkat ini menyediakan pencatatan data yang sangat akurat dan otomatis. Kemampuan pengukuran data dari puluhan sensor secara simultan menjadikan perangkat ini solusi yang ideal. Perangkat ini juga menyediakan fleksibilitas untuk memperluas pengukuran sesuai kebutuhan. Sensor water level merupakan tipe ultrasonik dengan resolusi tinggi (kurang dari 0,2 mm) dan rating IP68 yang memastikan ketahanan terhadap debu dan kotoran, serta tetap beroperasi di bawah air untuk durasi tertentu. Casing sensor terbuat dari stainless steel 316, yang menawarkan daya tahan luar biasa terhadap lingkungan dan korosi.
+
+AWR : Automatic Weather Recorder
+Perangkat ini dirancang khusus untuk monitoring otomatis pengukuran klimatologi dalam pemantauan jangka panjang. Menggunakan BE Data Logger, produk unggulan dari Beacon Engineering, perangkat ini menyediakan pencatatan data yang sangat akurat dan otomatis. Kemampuannya untuk mengukur data dari puluhan sensor secara simultan menjadikannya solusi yang ideal, memberikan fleksibilitas untuk memperluas pengukuran sesuai kebutuhan. Sensor cuaca ini menggunakan sistem pengukuran elektronik yang sederhana yang mampu memantau delapan parameter cuaca utama, termasuk suhu udara, kelembaban relatif, tekanan udara, kecepatan angin, arah angin, curah hujan, radiasi matahari, dan indeks UV. Perangkat ini memiliki sertifikasi IP66, yang menjamin perlindungan sepenuhnya terhadap debu, kontak langsung, dan paparan air, termasuk semprotan air bertekanan tinggi.
+
+ARR : Automatic Rainfall Recorder
+Perangkat ini dirancang khusus sebagai monitoring otomatis untuk pengukuran curah hujan dan digunakan dalam jangka panjang. Menggunakan BE Data Logger, produk unggulan dari Beacon Engineering, perangkat ini menyediakan pencatatan data yang sangat akurat dan otomatis. Kemampuannya untuk mengukur data dari puluhan sensor secara simultan menjadikannya solusi yang ideal seta memberikan fleksibilitas untuk memperluas pengukuran sesuai kebutuhan. Sensor curah hujan ini menggunakan self-emptying tipping bucket dengan resolusi 0,2 mm, terbuat dari bahan plastik berkualitas tinggi dengan desain sederhana untuk penggunaan jangka panjang. Casing luar terbuat dari bahan Styrosun yang membuat permukaannya mudah dibersihkan.
+
+ADR : Automatic Deformation Recorder
+Dirancang khusus untuk Smart Deformation Monitoring dalam pemantauan jangka panjang. Menggunakan BE Data Logger, produk unggulan dari Beacon Engineering ini menyediakan pencatatan data yang sangat akurat dan otomatis. Kemampuannya untuk mengukur data dari puluhan sensor secara simultan menjadikannya solusi yang ideal, memberikan fleksibilitas untuk memperluas pengukuran sesuai kebutuhan. Robotic Total Station dirancang sebagai solusi yang andal untuk alur kerja yang tepat dan produktif, memenuhi kebutuhan tinggi dalam survei dan konstruksi. Dengan kemampuan untuk merakit atau memetakan lebih banyak titik secara akurat dalam waktu yang lebih singkat, instrumen ini meningkatkan efisiensi sambil mempertahankan kualitas dan konsistensi. Proses digital yang ramah pengguna memberikan hasil yang akurat dan dapat diulang, meminimalkan pekerjaan ulang, serta meningkatkan kontrol kualitas. Produk ini merupakan pilihan profesional yang komprehensif untuk layout, survei, dan machine guidance.
+ 
+(AWQR) Automatic Water Quality Recorder adalah Perangkat ini dirancang khusus sebagai monitoring otomatis untuk pengukuran kualitas air dan digunakan dalam  panjang. Menggunakan BE Data Logger, produk unggulan dari Beacon Engineering, perangkat ini menyediakan pencatatan data yang sangat akurat dan otomatis. Kemampuannya untuk mengukur data dari puluhan sensor secara simultan menjadikannya solusi yang ideal seta memberikan fleksibilitas untuk memperluas pengukuran sesuai kebutuhan. Sensor kualitas air ini memiliki standar sertifikasi IP68, yang memastikan perlindungan total terhadap debu, kontak langsung, serta ketahanan terhadap semprotan air bertekanan tinggi.
+
+AVWR : Automatic Vibrating Wire Recorder
+Perangkat ini dirancang khusus untuk monitoring otomatis pengukuran getaran kawat dalam pemantauan jangka panjang. Menggunakan BE Data Logger, produk unggulan dari Beacon Engineering, perangkat ini menyediakan pencatatan data yang sangat akurat dan otomatis. Kemampuannya untuk mengukur data dari puluhan sensor secara simultan menjadikannya solusi yang ideal, memberikan fleksibilitas untuk memperluas pengukuran sesuai kebutuhan. Perangkat ini menggabungkan Beacon Data Logger, produk premium dari Beacon Engineering. Perangkat ini mampu mengukur data dari berbagai sensor secara bersamaan dan dapat dikembangkan lebih lanjut untuk mendukung aplikasi pengukuran yang lebih luas.
+
+AWGC :  Automatic Water Gate Controller
+Perangkat ini dirancang khusus sebagai automatic controlling untuk pintu air dalam pemantauan jangka panjang. Menggunakan BE Data Logger, produk unggulan dari Beacon Engineering, perangkat ini menyediakan pencatatan data yang sangat akurat dan otomatis. Kemampuannya untuk mengukur data dari puluhan sensor secara simultan menjadikannya solusi yang ideal serta memberikan fleksibilitas untuk memperluas pengukuran sesuai kebutuhan. Water Gate Controller ini mampu mengukur data dari puluhan sensor secara bersamaan, dan perangkat ini juga dapat diperluas untuk mendukung aplikasi pengukuran dan pengendalian yang lebih luas. 
+
+
+BERIKUT LIST DATA POS LOGGER:
+Kabupaten: Bantul
+1. ID: 10022
+Nama Lokasi: Pos AWLR Bantar
+Alamat: Kalijoho, Argosari, Kec. Sedayu
+
+2. ID: 10023
+Nama Lokasi: Pos AWLR Kedungmiri
+Alamat: Siuk 1, Selopamioro, Kec. Imogiri
+
+3. ID: 10030
+Nama Lokasi: Pos ARR Sanden
+Alamat: Tunjungan, Caturharjo, Kec. Pandak
+
+4. ID: 10038
+Nama Lokasi: Pos ARR Terong
+Alamat: Terong - Dlingo No.2, RT.06/RW.13, Terong II, Terong, Kec. Dlingo
+
+5. ID: 10040
+Nama Lokasi: Pos AWR Barongan
+Alamat: Bungas, Sumberagung, Kec. Jetis
+
+6. ID: 10089
+Nama Lokasi: Pos AWLR Wonokromo
+Alamat: Ketongo, Wonokromo, Kec. Pleret
+
+7. ID: 10206
+Nama Lokasi: Pos ARR Nyemengan
+Alamat: Nyemengan, Tirtonirmolo, Kasihan
+
+📍 Kabupaten: Gunung Kidul
+
+1. ID: 10024
+Nama Lokasi: Pos AWLR Bunder
+Alamat: Bunder, Kec. Patuk
+
+2. ID: 10031
+Nama Lokasi: Pos ARR Ngawen
+Alamat: Serut, Beji, Kec. Ngawen
+
+3. ID: 10039
+Nama Lokasi: Pos ARR Kedungkeris
+Alamat: Sendowo Lor, Kedung Keris, Kec. Nglipar
+
+4. ID: 10207
+Nama Lokasi: Pos ARR Gedhangan
+Alamat: Gedangan II, Gedangrejo, Kec. Karangmojo
+
+📍 Kabupaten: Kulon Progo
+
+1. ID: 10013
+Nama Lokasi: Pos ARR Kali Bawang
+Alamat: Banjaroyo, Kec. Kalibawang
+
+2. ID: 10020
+Nama Lokasi: Pos AWLR Bendungan
+Alamat: Cokrodapan, Triharjo, Kec. Wates
+
+3. ID: 10027
+Nama Lokasi: Pos ARR Singkung
+Alamat: Kamal, Pendoworejo, Kec. Girimulyo
+
+4. ID: 10028
+Nama Lokasi: Pos ARR Sapon
+Alamat: Gerjen, Sidorejo, Kec. Lendah
+
+5. ID: 10029
+Nama Lokasi: Pos ARR Hargorejo
+Alamat: Ngulakan, Hargorejo, Kec. Kokap
+
+6. ID: 10037
+Nama Lokasi: Pos ARR Borrowarea
+Alamat: Tegalrejo, Hargowilis, Kec. Kokap
+
+7. ID: 10057
+Nama Lokasi: Pos AWLR Pengasih
+Alamat: Kepek, Pengasih, Kec. Pengasih
+
+8. ID: 10058
+Nama Lokasi: Pos AWLR Kali Bawang
+Alamat: Banjaroyo, Kec. Kalibawang
+
+9. ID: 10090
+Nama Lokasi: Pos AWLR Sapon
+Alamat: Sapon, Sidorejo, Kec. Lendah
+
+10. ID: 10094
+Nama Lokasi: Pos AWR Tegal
+Alamat: Ngujon, Banjarharjo, Kec. Kalibawang
+
+11. ID: 10112
+Nama Lokasi: Pos ARR Gembongan
+Alamat: Gembongan, Sukoreno, Kec. Sentolo
+
+12. ID: 10255
+Nama Lokasi: Pos AWR Beji
+Alamat: Jl. Wates - Kedundang, Area Sawah, Wates, Kec. Wates, Kabupaten Kulon Progo
+
+📍 Kabupaten: Sleman
+
+1. ID: 10001
+Nama Lokasi: Pos AWR Kaliurang
+Alamat: Kaliurang, Hargobinangun, Pakem, Sleman
+
+2. ID: 10002
+Nama Lokasi: Pos ARR Bronggang
+Alamat: Randusari, Argomulyo, Kec. Cangkringan
+
+3. ID: 10003
+Nama Lokasi: Pos ARR Kemput
+Alamat: Candibinangun, Kec. Pakem, Kabupaten Sleman
+
+4. ID: 10014
+Nama Lokasi: Pos AWLR Seturan
+Alamat: Kledokan, Caturtunggal, Kec. Depok
+
+5. ID: 10015
+Nama Lokasi: Pos AWLR Papringan
+Alamat: Papringan, Caturtunggal, Depok
+
+6. ID: 10016
+Nama Lokasi: Pos AWLR Pogung
+Alamat: Pogung Kidul, Sinduadi, Kec. Mlati
+
+7. ID: 10017
+Nama Lokasi: Pos AWLR Sinduadi
+Alamat: Mlati Beningan, Sendangadi, Kec. Mlati
+
+8. ID: 10021
+Nama Lokasi: Pos AWLR Opak Pulo
+Alamat: Klurak, Tamanmartani, Kec. Kalasan
+
+9. ID: 10026
+Nama Lokasi: Pos ARR Gemawang
+Alamat: Jl. Selokan Mataram, Gemawang, Sinduadi, Kec. Mlati
+
+10. ID: 10032
+Nama Lokasi: Pos ARR Angin-Angin
+Alamat: Donoasih, Donokerto, Kec. Turi
+
+11. ID: 10033
+Nama Lokasi: Pos ARR Seyegan
+Alamat: Karang, Banyurejo, Kec. Tempel
+
+12. ID: 10034
+Nama Lokasi: Pos ARR Godean
+Alamat: Druju Krojan, Margodadi, Kec. Seyegan
+
+13. ID: 10035
+Nama Lokasi: Pos ARR Prumpung
+Alamat: Prumpung, Sardonoharjo, Kec. Ngaglik
+
+14. ID: 10036
+Nama Lokasi: Pos ARR Giriwungu
+Alamat: Pudak, Giriwungu, Kec. Panggang
+
+15. ID: 10111
+Nama Lokasi: Pos ARR Beran
+Alamat: Josari, Tridadi, Kec. Sleman
+
+16. ID: 10113
+Nama Lokasi: Pos ARR Santan
+Alamat: Karangploso, Maguwoharjo, Kec. Depok
+
+17. ID: 10114
+Nama Lokasi: Pos ARR Plataran
+Alamat: Plataran, Kiyudan, Selomartani, Kec. Kalasan
+
+18. ID: 10311
+Nama Lokasi: Pos AWLR Gumuk
+Alamat: Besi, Sidoarum, Godean, Sleman
+
