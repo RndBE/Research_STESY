@@ -124,7 +124,7 @@ neo_test_prompts = [
     "Apa saja logger yang aktif saat ini?",  # show_list_logger
     "Jelaskan bagaimana cara kerja sistem STESY.",  # how_it_works
     "Siapa itu Nyonya Cream Puff",  # ai_limitation
-    "Di mana tekanan udara paling rendah hari ini?"
+    "Di mana tekanan udara paling rendah hari ini?" # compare_across_loggers
 ]
 
 print("\n=== PREDIKSI INTENT ===")

@@ -283,7 +283,7 @@ def find_and_fetch_old_data(name_list, logger_list, prompt_text, threshold=40, m
 
     return results
 
-def extract_date_structured(text): # v07.05.25
+def extract_date_structured(text): # v23.05.25
     MONTHS_ID = {
         "januari": "01", "februari": "02", "maret": "03", "april": "04",
         "mei": "05", "juni": "06", "juli": "07", "agustus": "08",
@@ -300,7 +300,7 @@ def extract_date_structured(text): # v07.05.25
     def output(start, end, interval=None):
         if not interval:
             delta_days = (end - start).days
-            interval = "jam" if delta_days == 0 else "hari"
+            interval = "hari" if delta_days == 0 else "hari"
         return {
             "interval": interval,
             "awal_tanggal": start.strftime("%Y-%m-%d"),
