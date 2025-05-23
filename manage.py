@@ -179,18 +179,18 @@ class PromptProcessedMemory:
             print(f"[INTENT PREDICTION ERROR] {e}")
             self.intent = "unknown_intent"
 
-        if self._should_use_memory(new_prompt):
-            self._extract_context_memory()
-        else:
-            self._extract_context_memory(text=new_prompt)
-
-        # # ✅ Deteksi apakah harus pakai context memory sebelumnya
-        # print("new_prompt", new_prompt)
-        # if self._should_use_memory(new_prompt) and not self._contains_explicit_logger_or_date(new_prompt):
-        #     context_window = self.get_context_window(window_size=6)
-        #     self._extract_context_memory(text=" ".join([m["content"] for m in context_window if m["role"] == "user"]))
+        # if self._should_use_memory(new_prompt): # change from this 
+        #     self._extract_context_memory()
         # else:
         #     self._extract_context_memory(text=new_prompt)
+
+        # ✅ Deteksi apakah harus pakai context memory sebelumnya to this line of code
+        print("new_prompt", new_prompt) 
+        if self._should_use_memory(new_prompt) and not self._contains_explicit_logger_or_date(new_prompt):
+            context_window = self.get_context_window(window_size=6)
+            self._extract_context_memory(text=" ".join([m["content"] for m in context_window if m["role"] == "user"]))
+        else:
+            self._extract_context_memory(text=new_prompt)
 
         # ✅ Ambil target
         if self.intent == "show_logger_data":
