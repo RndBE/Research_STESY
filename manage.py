@@ -1,6 +1,7 @@
 import os
 import json
 import re
+from ollama import chat # modif 2
 from typing import List, Dict, Optional
 from transformers import BertTokenizer, BertForSequenceClassification
 import torch
@@ -285,7 +286,7 @@ import torch
 from transformers import BertTokenizer, BertForSequenceClassification
 import joblib
 from super_tools import original_fetch_data_range, find_and_fetch_latest_data, fetch_list_logger_from_prompt_flexibleV1, original_fetch_status_logger, fetch_list_logger, original_compare_by_date
-from super_tools import general_stesy
+from super_tools import general_stesy, summarize_logger_data
 
 class IntentHandler:
     def __init__(self, model_path, tokenizer_path, label_encoder_path, max_length: int = 128):
@@ -324,7 +325,7 @@ class IntentManager:
             "get_logger_photo_path": self.get_photo_path,
             "how_it_works": self.explain_system,
             "analyze_logger_by_date": self.analyze_by_date,
-            "ai_limitation": self.smart_respond
+            "ai_limitation": self.ai_limitation
         }
 
     def handle_intent(self):
@@ -347,6 +348,26 @@ class IntentManager:
             return "Target logger atau daftar logger tidak tersedia."
 
         fetched = find_and_fetch_latest_data(target_loggers, logger_list)
+        print("fetched data adalah :",fetched)
+
+        summaries = []
+        for item in fetched:
+            nama_lokasi = item['logger_name']
+            data = item['data']
+            summary = summarize_logger_data(nama_lokasi, data)
+            summaries.append(summary)
+
+        return "\n\n---\n\n".join(summaries)
+
+        # if not fetched:
+        #     return "Tidak ditemukan data untuk logger yang disebutkan."
+
+        # for item in fetched:
+        #     print(f"\n📍 {item['logger_name']}")
+        #     for key, value in item['data'].items():
+        #         print(f"{key}: {value}")
+
+        # return f"Berhasil mengambil data terbaru dari {len(fetched)} logger."
 
         if not fetched:
             return "Tidak ditemukan data untuk logger yang disebutkan."
@@ -397,15 +418,21 @@ class IntentManager:
         logger_list = fetch_list_logger()
 
         fetched = find_and_fetch_latest_data(target_loggers, logger_list)
-        if not fetched:
-            return "Tidak ditemukan data untuk logger yang disebutkan."
-
+        # 🔥 Gunakan summary sebagai tampilan perbandingan data
+        summaries = []
         for item in fetched:
-            print(f"\n📍 {item['logger_name']}")
-            for key, value in item['data'].items():
-                print(f"{key}: {value}")
+            nama_lokasi = item['logger_name']
+            data = item['data']
+            summary = summarize_logger_data(nama_lokasi, data)
+            summaries.append(summary)
 
-        return f"Berhasil mengambil data dari {len(fetched)} logger."
+        return "\n\n---\n\n".join(summaries)
+        # for item in fetched:
+        #     print(f"\n📍 {item['logger_name']}")
+        #     for key, value in item['data'].items():
+        #         print(f"{key}: {value}")
+
+        # return f"Berhasil mengambil data dari {len(fetched)} logger."
 
     def compare_across_loggers(self):
         return "Menjalankan compare_across_loggers"
@@ -445,14 +472,41 @@ class IntentManager:
         result = general_stesy(messages=[summary_prompt])
         self.memory.analysis_result = result
         return result
+    # menambahkan function smart_respond()
+    def smart_respond(self):
+        prompt = self.memory.latest_prompt
 
-    def smart_respond(self): # hapus kwargs di function ini
+        # Kirim ke LLM dengan system prompt ringan
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Anda adalah asisten ramah bernama STESY yang menjawab sapaan dan chat ringan.\n"
+                    "Jika pengguna bertanya hal umum, balas dengan sopan dan hangat.\n"
+                    "Jika pertanyaan di luar konteks telemetri, arahkan dengan bijak tanpa menolak secara kasar."
+                )
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
 
+        response = chat(model="llama3.1:8b", messages=messages)
+        return response["message"]["content"]
+
+    def ai_limitation(self):
         # sebuah function yang dapat merespon, merekomendasikan dan menyarankan output.
         # sebuah function yang dapat memberikan respon jika prompt memiliki struktur yang kurang
         # sebuah function yang dapat memberikan struktur yang benar sesuai intent nya
+        """
+        Menangani intent 'ai_limitation' atau percakapan ringan/chat umum.
+        Memberikan jawaban ramah atau netral menggunakan smart_respond().
+        """
+        prompt = self.memory.latest_prompt
+        print(f"[AI Limitation] Prompt: {prompt}")
         
-        return None
+        return self.smart_respond()
 
     def fallback_response(self):
         print("Fallback intent dijalankan")

@@ -109,12 +109,12 @@ def original_fetch_status_logger(prompt: str):
         return f"Terjadi kesalahan saat mengakses API: {str(e)}"
 
 
-def original_fetch_data_range(prompt: str, target_loggers: list, logger_list: list): # Error F_I Pertama
+def original_fetch_data_range(prompt: str, target_loggers: list, logger_list: list):
     date_info = extract_date_structured(prompt)
     interval = date_info.get("interval")
     start_date = date_info.get("awal_tanggal")
     end_date = date_info.get("akhir_tanggal")
-    print("date_info",date_info)
+    print("date_info", date_info)
 
     if not interval or not start_date or not end_date:
         return "Tanggal tidak dikenali dalam prompt."
@@ -127,7 +127,7 @@ def original_fetch_data_range(prompt: str, target_loggers: list, logger_list: li
         for logger in logger_list
     }
     all_logger_names = list(normalized_choices.keys())
-    results = []
+    summaries = []
 
     for name_fragment in target_loggers:
         query = normalize(name_fragment)
@@ -157,19 +157,19 @@ def original_fetch_data_range(prompt: str, target_loggers: list, logger_list: li
                 resp = requests.get(url, timeout=20)
                 resp.raise_for_status()
                 data = resp.json()
+
                 if isinstance(data, list) and data:
-                    results.append({
-                        "logger_name": logger_name,
-                        "logger_id": logger_id,
-                        "interval": interval,
-                        "start_date": start_date,
-                        "end_date": end_date,
-                        "data": data
-                    })
+                    summary = summarize_logger_data(logger_name, data)
+                    summaries.append(summary)
+
             except Exception as e:
                 print(f"[ERROR] Gagal fetch data untuk {logger_name}: {e}")
 
-    return results if results else "Tidak ditemukan data yang cocok untuk logger yang dimaksud."
+    if summaries:
+        print("fetched data adalah :", summaries)
+        return "\n\n---\n\n".join(summaries)
+    else:
+        return "Tidak ditemukan data yang cocok untuk logger yang dimaksud."
 
 
 def original_compare_by_date(prompt: str, target_loggers: list, logger_list: list):
@@ -432,6 +432,71 @@ def extract_date_structured(text): # v07.05.25
         "awal_tanggal": None,
         "akhir_tanggal": None
     }
+
+# add new summarize function
+def summarize_logger_data(nama_lokasi, latest_data, model_name="llama3.1:8b"):
+    def estimate_tokens(text: str) -> int:
+        return int(len(text) / 4)
+
+    def format_day_parameters(data: dict) -> str:
+        return "\n".join(
+            [f"* **{key.replace('_',' ').title()}**: {value}" 
+             for key, value in data.items() if key.lower() != "id_logger"]
+        )
+
+    # === Tangani data satu hari vs multi hari ===
+    if isinstance(latest_data, list):
+        parameter_text = ""
+        for day in latest_data:
+            tanggal = day.get("Waktu", "Tanggal tidak diketahui")
+            parameter_text += f"\n### {tanggal}\n"
+            parameter_text += format_day_parameters(day) + "\n"
+
+        waktu = f"{latest_data[0].get('Waktu', '?')} hingga {latest_data[-1].get('Waktu', '?')}"
+        koneksi = latest_data[-1].get("Koneksi", "Koneksi Terputus")
+
+    elif isinstance(latest_data, dict):
+        parameter_text = format_day_parameters(latest_data)
+        waktu = latest_data.get("Waktu", "waktu tidak diketahui")
+        koneksi = latest_data.get("Koneksi", "Koneksi Terputus")
+
+    else:
+        return "⚠️ Format data logger tidak dikenali (harus dict atau list of dict)."
+
+    print("parameternya adalah:\n", parameter_text)
+
+    # === Prompt LLM untuk Kesimpulan Naratif ===
+    user_prompt = (
+        f"Tampilkan data lengkap dari logger **{nama_lokasi}** dalam format markdown.\n\n"
+        f"Data diambil pada waktu: {waktu}.\n"
+        f"Status koneksi logger: {koneksi}.\n\n"
+        f"Berikut adalah semua parameter yang tersedia:\n\n"
+        f"{parameter_text}\n\n"
+        "JANGAN tambahkan kesimpulan atau penjelasan.\n"
+        "Cukup tampilkan semua data dalam urutan seperti yang diberikan.\n"
+        f"Awali dengan judul: **Data Monitoring Telemetri {nama_lokasi}**\n"
+        "Tambahkan garis pemisah '=====' di bawah judul."
+    )
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "Anda adalah asisten telemetri pintar.\n"
+                "Tugas Anda adalah memberikan satu paragraf pendek ringkasan berdasarkan data logger yang tersedia.\n"
+                "Ringkasan harus objektif, ringkas, dan relevan — hindari penjelasan berlebihan."
+            )
+        },
+        {"role": "user", "content": user_prompt}
+    ]
+
+    full_prompt = messages[0]["content"] + "\n\n" + user_prompt
+    estimated_tokens = estimate_tokens(full_prompt)
+    print(f"[DEBUG] Estimasi jumlah token prompt: {estimated_tokens}")
+
+    response = chat(model=model_name, messages=messages, options={"num_predict": 1024})
+    return response["message"]["content"]
+
 
 def normalize_text(text):
     return text.lower().replace("pos", "").replace("logger", "").strip()
