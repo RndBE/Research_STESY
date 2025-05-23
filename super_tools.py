@@ -283,7 +283,10 @@ def find_and_fetch_old_data(name_list, logger_list, prompt_text, threshold=40, m
 
     return results
 
-def extract_date_structured(text): # v23.05.25
+def extract_date_structured(text):  # v23.05.25_fx
+    from datetime import datetime, timedelta
+    import re, calendar
+
     MONTHS_ID = {
         "januari": "01", "februari": "02", "maret": "03", "april": "04",
         "mei": "05", "juni": "06", "juli": "07", "agustus": "08",
@@ -307,7 +310,53 @@ def extract_date_structured(text): # v23.05.25
             "akhir_tanggal": end.strftime("%Y-%m-%d")
         }
 
-    # === Explicit Dates ===
+    # === Format: 1 mei hingga 13 mei 2025 ===
+    match = re.search(r'(\d{1,2})\s+([a-z]+)\s+(dan|hingga|sampai|ke|s\.d\.|menuju)\s+(\d{1,2})\s+([a-z]+)\s+(\d{4})', text)
+    if match:
+        d1 = int(match.group(1))
+        m1 = match.group(2)
+        d2 = int(match.group(4))
+        m2 = match.group(5)
+        y = int(match.group(6))
+        if m1 in MONTHS_ID and m2 in MONTHS_ID:
+            start = datetime(y, int(MONTHS_ID[m1]), d1)
+            end = datetime(y, int(MONTHS_ID[m2]), d2)
+            return output(start, end, interval="hari")
+
+    # === Format: 1 mei hingga 13 mei (tanpa tahun, default tahun ini) ===
+    match = re.search(r'(\d{1,2})\s+([a-z]+)\s+(dan|hingga|sampai|ke|s\.d\.|menuju)\s+(\d{1,2})\s+([a-z]+)', text)
+    if match:
+        d1 = int(match.group(1))
+        m1 = match.group(2)
+        d2 = int(match.group(4))
+        m2 = match.group(5)
+        y = today.year
+        if m1 in MONTHS_ID and m2 in MONTHS_ID:
+            start = datetime(y, int(MONTHS_ID[m1]), d1)
+            end = datetime(y, int(MONTHS_ID[m2]), d2)
+            return output(start, end, interval="hari")
+
+    # === Format: 1 mei 2024 hingga 13 mei 2025 ===
+    match = re.search(r'(\d{1,2})\s+([a-z]+)\s+(\d{4})\s+(hingga|sampai|s\.d\.|ke|menuju)\s+(\d{1,2})\s+([a-z]+)\s+(\d{4})', text)
+    if match:
+        d1, m1, y1 = int(match.group(1)), match.group(2).lower(), int(match.group(3))
+        d2, m2, y2 = int(match.group(5)), match.group(6).lower(), int(match.group(7))
+        if m1 in MONTHS_ID and m2 in MONTHS_ID:
+            start = datetime(y1, int(MONTHS_ID[m1]), d1)
+            end = datetime(y2, int(MONTHS_ID[m2]), d2)
+            return output(start, end, interval="hari")
+
+    # === Format: 1 mei (tanpa tahun) ===
+    match = re.search(r'(\d{1,2})\s+([a-z]+)\b', text)
+    if match:
+        d1 = int(match.group(1))
+        m1 = match.group(2)
+        if m1 in MONTHS_ID:
+            y = today.year
+            date_obj = datetime(y, int(MONTHS_ID[m1]), d1)
+            return output(date_obj, date_obj)
+
+    # === Format tanggal eksplisit (YYYY-MM-DD atau DD-MM-YYYY) ===
     match = re.search(r'\b(\d{4}-\d{2}-\d{2})\b|\b(\d{2}[-/]\d{2}[-/]\d{4})\b', text)
     if match:
         date_str = match.group(0)
@@ -321,7 +370,7 @@ def extract_date_structured(text): # v23.05.25
     if "hari ini" in text:
         return output(today, today)
 
-    if re.search(r"\bkema(?:rin|ren)\b", text):  # Support for 'kemarin' and 'kemaren'
+    if re.search(r"\\bkema(?:rin|ren)\\b", text):
         day = today - timedelta(days=1)
         return output(day, day, interval="hari")
 
