@@ -289,6 +289,39 @@ import joblib
 from super_tools import original_fetch_data_range, find_and_fetch_latest_data, fetch_list_logger_from_prompt_flexibleV1, original_fetch_status_logger, fetch_list_logger, original_compare_by_date, extract_date_structured
 from super_tools import general_stesy, summarize_logger_data
 
+class PromptValidator:
+    def __init__(self, prompt: str, predicted_intent: str):
+        self.prompt = prompt.lower()
+        self.predicted_intent = predicted_intent
+
+    def is_ambiguous_prompt(self) -> bool:
+        ambiguous_phrases = [
+            "lanjutkan", "iya", "ya", "bagaimana tadi", "data di atas", "tampilkan",
+            "tolong", "oke", "lihat semua", "teruskan", "apa itu", "jelaskan"
+        ]
+        return any(phrase in self.prompt for phrase in ambiguous_phrases) or len(self.prompt.strip().split()) < 3
+
+    def is_intent_mismatch(self) -> bool:
+        # Contoh: "tampilkan data kaliurang" tapi malah terdeteksi sebagai fetch_logger_by_date
+        if ("tampilkan" in self.prompt or "lihat" in self.prompt) and "tanggal" not in self.prompt:
+            if self.predicted_intent in ["fetch_logger_by_date", "analyze_logger_by_date"]:
+                return True
+
+        # Misalnya: menyebut "status hujan" tapi intent bukan fetch_status_rain
+        if "tidak hujan" in self.prompt or "sedang hujan" in self.prompt:
+            if self.predicted_intent != "fetch_status_rain":
+                return True
+
+        return False
+
+    def should_fallback_to_ai(self) -> bool:
+        return self.is_ambiguous_prompt() or self.is_intent_mismatch()
+
+# === Contoh integrasi dalam PromptProcessedMemory ===
+# validator = PromptValidator(new_prompt, self.intent)
+# if validator.should_fallback_to_ai():
+#     self.intent = "ai_limitation"  # biar dijawab oleh smart_respond()
+
 class IntentHandler:
     def __init__(self, model_path, tokenizer_path, label_encoder_path, max_length: int = 128):
         self.model = BertForSequenceClassification.from_pretrained(model_path)
@@ -330,10 +363,25 @@ class IntentManager:
         }
 
     def handle_intent(self):
+        prompt = self.memory.latest_prompt
         intent = self.memory.intent
-        print(intent)
+
+        # Validasi prompt sebelum proses intent
+        validator = PromptValidator(prompt, intent)
+        if validator.should_fallback_to_ai():
+            print("[INFO] Prompt ambigu atau intent tidak cocok, gunakan smart_respond()")
+            return self.smart_respond()
+
+
         func = self.intent_map.get(intent, self.fallback_response)
         return func()
+    
+
+    # def handle_intent(self):
+    #     intent = self.memory.intent
+    #     print(intent)
+    #     func = self.intent_map.get(intent, self.fallback_response)
+    #     return func()
 
     def fetch_latest_data(self):
         print("show_logger_data ini telah berjalan")
