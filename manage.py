@@ -526,7 +526,7 @@ class IntentManager:
 
         # Panggil Ollama
         response = chat(
-            model='llama3.1',
+            model='llama3.1:8b',
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"{user_question}\n\nBerikut datanya:\n{context_data}"}
@@ -583,7 +583,7 @@ class IntentManager:
 
             # Panggil LLaMA chat dengan konteks data dan pertanyaan asli
             response = chat(
-                model='llama3.1',
+                model='llama3.1:8b',
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"{self.memory.latest_prompt}\n\nBerikut data yang tersedia:\n{context_data}"}
@@ -604,7 +604,7 @@ class IntentManager:
             "Berikan jawaban yang singkat, jelas, dan sesuai dengan permintaan pengguna."
         )
         response = chat(
-            model='llama3.1',
+            model='llama3.1:8b',
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"{self.memory.latest_prompt}\n\nBerikut data yang tersedia:\n{summaries}"}
