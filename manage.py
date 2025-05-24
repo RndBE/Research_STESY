@@ -290,32 +290,50 @@ from super_tools import original_fetch_data_range, find_and_fetch_latest_data, f
 from super_tools import general_stesy, summarize_logger_data
 
 class PromptValidator:
-    def __init__(self, prompt: str, predicted_intent: str):
+    INTENT_REQUIREMENTS = {
+        "show_logger_data": {"target": True, "date": False},
+        "fetch_logger_by_date": {"target": True, "date": True},
+        "compare_logger_by_date": {"target": True, "date": True},
+        "compare_logger_data": {"target": True, "date": False},
+        "analyze_logger_by_date": {"target": True, "date": True},
+        "fetch_status_rain": {"target": False, "date": False},
+        "show_list_logger": {"target": False, "date": False},
+        "ai_limitation": {"target": False, "date": False}
+    }
+
+    def __init__(self, prompt: str, predicted_intent: str, target: list = None, date: str = None):
         self.prompt = prompt.lower()
         self.predicted_intent = predicted_intent
+        self.target = target or []
+        self.date = date
 
     def is_ambiguous_prompt(self) -> bool:
         ambiguous_phrases = [
-            "lanjutkan", "iya", "ya", "bagaimana tadi", "data di atas", "tampilkan",
+            "lanjutkan", "iya", "ya", "bagaimana tadi", "data di atas",
             "tolong", "oke", "lihat semua", "teruskan", "apa itu", "jelaskan"
         ]
         return any(phrase in self.prompt for phrase in ambiguous_phrases) or len(self.prompt.strip().split()) < 3
 
     def is_intent_mismatch(self) -> bool:
-        # Contoh: "tampilkan data kaliurang" tapi malah terdeteksi sebagai fetch_logger_by_date
-        if ("tampilkan" in self.prompt or "lihat" in self.prompt) and "tanggal" not in self.prompt:
-            if self.predicted_intent in ["fetch_logger_by_date", "analyze_logger_by_date"]:
-                return True
-
-        # Misalnya: menyebut "status hujan" tapi intent bukan fetch_status_rain
+        if ("tampilkan" in self.prompt or "lihat" in self.prompt) and "data" in self.prompt:
+            if any(keyword in self.prompt for keyword in ["awr", "arr", "logger", "pos"]):
+                if self.predicted_intent not in ["show_logger_data"]:
+                    return True
         if "tidak hujan" in self.prompt or "sedang hujan" in self.prompt:
             if self.predicted_intent != "fetch_status_rain":
                 return True
+        return False
 
+    def is_missing_required_fields(self) -> bool:
+        reqs = self.INTENT_REQUIREMENTS.get(self.predicted_intent, {})
+        if reqs.get("target") and not self.target:
+            return True
+        if reqs.get("date") and self.date is None:
+            return True
         return False
 
     def should_fallback_to_ai(self) -> bool:
-        return self.is_ambiguous_prompt() or self.is_intent_mismatch()
+        return self.is_ambiguous_prompt() or self.is_intent_mismatch() or self.is_missing_required_fields()
 
 # === Contoh integrasi dalam PromptProcessedMemory ===
 # validator = PromptValidator(new_prompt, self.intent)
@@ -365,18 +383,18 @@ class IntentManager:
     def handle_intent(self):
         prompt = self.memory.latest_prompt
         intent = self.memory.intent
+        target = self.memory.last_logger_list or [self.memory.last_logger]
+        date = self.memory.last_date
 
-        # Validasi prompt sebelum proses intent
-        validator = PromptValidator(prompt, intent)
+        # ✅ Kirim parameter lengkap ke validator
+        validator = PromptValidator(prompt, intent, target, date)
         if validator.should_fallback_to_ai():
             print("[INFO] Prompt ambigu atau intent tidak cocok, gunakan smart_respond()")
             return self.smart_respond()
 
-
         func = self.intent_map.get(intent, self.fallback_response)
         return func()
     
-
     # def handle_intent(self):
     #     intent = self.memory.intent
     #     print(intent)
@@ -648,18 +666,52 @@ class IntentManager:
         result = general_stesy(messages=[summary_prompt])
         self.memory.analysis_result = result
         return result
-    # menambahkan function smart_respond()
+    
+    # === Fungsi smart_respond untuk IntentManager ===
     def smart_respond(self):
         prompt = self.memory.latest_prompt
+        print("+++++ Function smart_respond Berjalan +++++")
+        print("prompt:", prompt)
 
-        # Kirim ke LLM dengan system prompt ringan
+        unavailable_features = [
+            "get_logger_photo_path", "compare_across_loggers", "show_selected_parameter", "explain_system"
+        ]
+        if self.memory.intent in unavailable_features:
+            return f"Fitur untuk `{self.memory.intent}` belum tersedia saat ini. Silakan gunakan perintah lain seperti menampilkan data logger, status hujan, atau analisis data."
+
+        validator = PromptValidator(prompt, self.memory.intent, self.memory.last_logger_list or [self.memory.last_logger], self.memory.last_date)
+
+        if validator.is_ambiguous_prompt():
+            return (
+                "Saya mendeteksi bahwa pertanyaan Anda masih kurang jelas. "
+                "Coba berikan informasi lebih lengkap, seperti:\n\n"
+                "- 'Tampilkan data terbaru dari ARR Gemawang'\n"
+                "- 'Bagaimana status hujan di AWR Beji?'\n"
+                "- 'Berikan perbandingan data kelembaban minggu ini'\n\n"
+                "Saya siap membantu jika pertanyaannya lebih spesifik."
+            )
+
+        if validator.is_intent_mismatch():
+            return (
+                f"Sepertinya sistem memprediksi intent Anda sebagai `{self.memory.intent}`, "
+                "tetapi isi pertanyaannya tidak sepenuhnya cocok.\n\n"
+                "Silakan cek kembali prompt Anda. Apakah maksud Anda ingin menampilkan data terbaru atau menganalisis tren?\n"
+                "Contoh:\n- 'Tampilkan data hari ini dari ARR Hargorejo'\n- 'Bandingkan kelembaban antara dua logger'"
+            )
+
+        if validator.is_missing_required_fields():
+            return (
+                "Saya tidak menemukan lokasi logger atau tanggal yang disebutkan dalam pertanyaan Anda sesuai dengan kebutuhan intent.\n"
+                "Silakan lengkapi prompt Anda, misalnya:\n- 'Tampilkan data dari ARR Gemawang'\n- 'Ambil data tanggal 1 Mei dari AWR Kaliurang'"
+            )
+
         messages = [
             {
                 "role": "system",
                 "content": (
-                    "Anda adalah asisten ramah bernama STESY yang menjawab sapaan dan chat ringan.\n"
-                    "Jika pengguna bertanya hal umum, balas dengan sopan dan hangat.\n"
-                    "Jika pertanyaan di luar konteks telemetri, arahkan dengan bijak tanpa menolak secara kasar."
+                    "Anda adalah asisten telemetri STESY. Jawablah pertanyaan ringan dengan ramah dan informatif.\n"
+                    "Jika pertanyaan terlalu umum atau tidak spesifik, minta klarifikasi dengan sopan.\n"
+                    "Jika pengguna menyebut fitur yang belum tersedia, beri tahu dengan jujur.\n"
                 )
             },
             {

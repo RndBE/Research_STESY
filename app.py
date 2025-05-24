@@ -23,7 +23,6 @@ def chat_endpoint():
 
     try: 
         latest_user_msg = next((m["content"] for m in reversed(user_messages) if m["role"] == "user"), "")
-
         # ✅ Inisialisasi memory dan intent manager
         memory = PromptProcessedMemory(
             user_id=user_id,
