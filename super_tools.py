@@ -367,6 +367,12 @@ def extract_date_structured(text):  # v23.05.25_fx
                 return output(parsed_date, parsed_date)
             except ValueError:
                 continue
+    match = re.search(r"(\d+)\s+minggu\s+(lalu|terakhir)", text)
+    if match:
+        weeks = int(match.group(1))
+        start = today - timedelta(weeks=weeks)
+        end = today
+        return output(start, end)
 
     if "hari ini" in text:
         return output(today, today)
@@ -386,12 +392,12 @@ def extract_date_structured(text):  # v23.05.25_fx
         end = start + timedelta(days=6)
         return output(start, end)
 
-    match = re.search(r"(\d+)\s+minggu\s+(lalu|terakhir)", text)
-    if match:
-        weeks = int(match.group(1))
-        start = today - timedelta(weeks=weeks)
-        end = today
-        return output(start, end)
+    # match = re.search(r"(\d+)\s+minggu\s+(lalu|terakhir)", text)
+    # if match:
+    #     weeks = int(match.group(1))
+    #     start = today - timedelta(weeks=weeks)
+    #     end = today
+    #     return output(start, end)
 
     if "awal bulan" in text:
         start = today.replace(day=1)
