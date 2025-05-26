@@ -575,7 +575,6 @@ class IntentManager:
         )
 
         # Pertanyaan asli dan data perbandingan
-        user_question = self.memory.latest_prompt
         context_data = "\n".join(comparison_data)
 
         # Panggil Ollama
@@ -583,7 +582,7 @@ class IntentManager:
             model='llama3.1:8b',
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"{user_question}\n\nBerikut datanya:\n{context_data}"}
+                {"role": "user", "content": f"{self.memory.latest_prompt}\n\nBerikut data yang tersedia:\n{context_data}"}
             ]
         )
 
