@@ -647,7 +647,7 @@ class IntentManager:
         fetched = find_and_fetch_latest_data(name_fragments, matched_parameters, logger_list)
 
         if not fetched:
-            return "Tidak ditemukan data terbaru untuk logger yang disebutkan."
+            return "Tidak ditemukan data terbaru untuk logger yang disebutkan." 
 
         # Siapkan data untuk konteks
         comparison_data = []
