@@ -48,6 +48,7 @@ def general_stesy(messages, model_name="llama3.1:8b"):
             "- Klimatologi\n"
             "- Analisis data logger\n\n"
             "Jika pertanyaan user sesuai konteks di atas, berikan jawaban secara informatif, jelas, dan dalam format markdown jika relevan.\n\n"
+            "Hapus Koneksi logger"
             "Namun jika pertanyaan user berada di luar topik (misalnya tentang sejarah, teknologi umum, hiburan, atau tidak ada hubungannya dengan sistem telemetri), "
             "**tolak dengan sopan boleh tambahkan emoticon**:\n"
         )
@@ -545,7 +546,7 @@ def summarize_logger_data(nama_lokasi, latest_data, model_name="llama3.1:8b"):
     user_prompt = (
         f"Tampilkan data lengkap dari logger **{nama_lokasi}** dalam format markdown.\n\n"
         f"Data diambil pada waktu: {waktu}.\n"
-        f"Status koneksi logger: {koneksi}.\n\n"
+        # f"Status koneksi logger: {koneksi}.\n\n"
         f"Berikut adalah semua parameter yang tersedia:\n\n"
         f"{parameter_text}\n\n"
         "tambahkan kesimpulan atau penjelasan singkat.\n"
