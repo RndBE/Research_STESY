@@ -551,7 +551,7 @@ class IntentManager:
         # Prompt sistem
         system_prompt = (
             "Kamu adalah asisten cerdas yang menjawab pertanyaan berdasarkan data logger. "
-            "Berikan jawaban sesuai dengan permintaan pengguna seperti nama pos dan parameter yang diminta."
+            "Berikan jawaban yang jelas dan sesuai dengan permintaan pengguna seperti nama pos dan parameter yang diminta."
         )
 
         # Pertanyaan asli dan data perbandingan
