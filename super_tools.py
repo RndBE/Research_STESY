@@ -8,6 +8,14 @@ from ollama import chat
 from datetime import datetime, timezone
 import requests
 
+
+extreme_keywords = [
+    "tertinggi", "terendah", "terdingin", "terpanas",
+    "paling panas", "paling dingin", "terbanyak", "tersedikit",
+    "terkecil", "terbesar", "paling kering", "paling basah",
+    "terbasah", "paling lembab", "paling kering"
+]
+
 sensor_aliases = {
     "Tinggi_Muka_Air": ["tinggi muka air", "water level", "level air", "ketinggian air"],
     "Max_Baterai_Logger": ["max baterai logger", "baterai maksimum", "baterai max", "maximum battery"],
@@ -881,6 +889,15 @@ def fetch_list_logger():
     except requests.RequestException as e:
         print(f"Error fetching logger data: {e}")
         return []
+
+def is_extreme_only(prompt, sensor_aliases):
+        prompt_lower = prompt.lower()
+        has_extreme = any(k in prompt_lower for k in extreme_keywords)
+        has_sensor = any(
+            any(alias.lower() in prompt_lower for alias in aliases)
+            for aliases in sensor_aliases.values()
+        )
+        return has_extreme and not has_sensor
 
 def fetch_latest_data(id_logger):
     url = f"https://dpupesdm.monitoring4system.com/api/data_new?id_logger={id_logger}"
