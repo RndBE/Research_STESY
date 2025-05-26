@@ -672,17 +672,35 @@ class IntentManager:
         return response["message"]["content"]
 
     def ai_limitation(self):
-        # sebuah function yang dapat merespon, merekomendasikan dan menyarankan output.
-        # sebuah function yang dapat memberikan respon jika prompt memiliki struktur yang kurang
-        # sebuah function yang dapat memberikan struktur yang benar sesuai intent nya
-        """
-        Menangani intent 'ai_limitation' atau percakapan ringan/chat umum.
-        Memberikan jawaban ramah atau netral menggunakan smart_respond().
-        """
         prompt = self.memory.latest_prompt
-        print(f"[AI Limitation] Prompt: {prompt}")
-        
-        return self.smart_respond()
+        model_name = "llama3.1:8b"
+
+        messages_llm = [
+            {
+                "role": "system",
+                "content": (
+                    "Anda adalah AI virtual assistant Smart Telemetry Systems (STESY) yang hanya menjawab pertanyaan dalam konteks khusus berikut:.\n"
+                    "- Telemetri\n"
+                    "- Hidrologi\n"
+                    "- Sungai\n"
+                    "- Cuaca\n"
+                    "- Klimatologi\n"
+                    "- Analisis data logger\n\n"
+                    "Jika pertanyaan user sesuai konteks di atas, berikan jawaban secara informatif, jelas, dan dalam format markdown jika relevan.\n\n"
+                    "Namun jika pertanyaan user berada di luar topik (misalnya tentang sejarah, teknologi umum, hiburan, atau tidak ada hubungannya dengan sistem telemetri), "
+                    "**tolak dengan sopan boleh tambahkan emoticon**:\n"
+                )
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+
+        response = chat(model=model_name, messages=messages_llm)
+        final_content = response["message"]["content"]
+
+        return final_content
 
     def fallback_response(self):
         print("Fallback intent dijalankan")
