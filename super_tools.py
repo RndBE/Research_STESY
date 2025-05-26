@@ -547,13 +547,26 @@ def summarize_logger_data(nama_lokasi, latest_data, model_name="llama3.1:8b"):
     return response["message"]["content"]
 
 
+def preprocess_name_list(name_list):
+    new_list = []
+    for name in name_list:
+        # Replace " dan " with comma, then split
+        name = name.lower().replace(" dan ", ",").replace(" & ", ",")
+        parts = [part.strip() for part in name.split(",") if part.strip()]
+        new_list.extend(parts)
+    return new_list
+
+
 def normalize_text(text):
-    return text.lower().replace("pos", "").replace("logger", "").strip()
+    return text.lower().replace("pos", "").replace("logger", "").replace("dan", "").replace("hingga", "").strip()
 
 def find_and_fetch_latest_data(name_list, logger_list, threshold=40, max_candidates=3):
     results = []
+    
+     # Tambahkan pre-processing
+    name_list = preprocess_name_list(name_list)
 
-    normalized_choices = {
+    normalized_choices = {  
         normalize_text(logger['nama_lokasi']): logger
         for logger in logger_list
     }
@@ -565,6 +578,8 @@ def find_and_fetch_latest_data(name_list, logger_list, threshold=40, max_candida
             continue
 
         query = normalize_text(name_fragment)
+        print("query :", query)
+
         fuzzy_results = process.extract(query, all_logger_names, scorer=fuzz.token_set_ratio, limit=max_candidates)
 
         print(f"\n[DEBUG] Fuzzy match for: '{name_fragment}'")
