@@ -284,6 +284,7 @@ class PromptProcessedMemory:
 import warnings
 warnings.filterwarnings('ignore')
 import torch
+import re
 from transformers import BertTokenizer, BertForSequenceClassification
 import joblib
 from super_tools import original_fetch_data_range, find_and_fetch_latest_data, fetch_list_logger_from_prompt_flexibleV1, original_fetch_status_logger, fetch_list_logger, original_compare_by_date, extract_date_structured
@@ -297,7 +298,7 @@ class PromptValidator:
         "compare_logger_data": {"target": True, "date": False},
         "analyze_logger_by_date": {"target": True, "date": True},
         "fetch_status_rain": {"target": False, "date": False},
-        "show_list_logger": {"target": False, "date": False},
+        "show_list_logger": {"target": False, "date": False}, 
         "ai_limitation": {"target": False, "date": False}
     }
 
@@ -312,7 +313,15 @@ class PromptValidator:
             "lanjutkan", "iya", "ya", "bagaimana tadi", "data di atas",
             "tolong", "oke", "lihat semua", "teruskan", "apa itu", "jelaskan"
         ]
-        return any(phrase in self.prompt for phrase in ambiguous_phrases) or len(self.prompt.strip().split()) < 3
+
+        print("[DEBUG] Checking ambiguous prompt:", self.prompt)
+        for phrase in ambiguous_phrases:
+            if re.search(rf"\\b{re.escape(phrase)}\\b", self.prompt):
+                print(f"[DEBUG] Found ambiguous phrase: '{phrase}'")
+                return True
+
+        return len(self.prompt.strip().split()) < 3
+
 
     def is_intent_mismatch(self) -> bool:
         if ("tampilkan" in self.prompt or "lihat" in self.prompt) and "data" in self.prompt:
@@ -387,7 +396,10 @@ class IntentManager:
         date = self.memory.last_date
 
         # ✅ Kirim parameter lengkap ke validator
+        print(f"Dari Prompt {prompt} Intent adalah : {intent}, target logger adalah : {target}, tanggal yang dicari adalah : {target}")
+        
         validator = PromptValidator(prompt, intent, target, date)
+        print("validator :",validator.should_fallback_to_ai())
         if validator.should_fallback_to_ai():
             print("[INFO] Prompt ambigu atau intent tidak cocok, gunakan smart_respond()")
             return self.smart_respond()
