@@ -632,9 +632,10 @@ class IntentManager:
                 "Silakan sebutkan seperti suhu udara, kelembaban udara, tekanan udara, atau curah hujan."
             )
 
-        # Ambil data logger
+        # Ambil data logger dengan filtered matched_parameters [selected_param]
         name_fragments = [logger["nama_lokasi"] for logger in logger_list]
-        fetched = find_and_fetch_latest_data(name_fragments, logger_list)
+        matched_parameters = [selected_param]  # harus dalam list untuk filter
+        fetched = find_and_fetch_latest_data(name_fragments, matched_parameters, logger_list)
 
         if not fetched:
             return "Tidak ditemukan data terbaru untuk logger yang disebutkan."
