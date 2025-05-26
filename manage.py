@@ -108,7 +108,7 @@ class PromptProcessedMemory:
     def _extract_context_memory(self, text: Optional[str] = None):
         combined_text = text.lower() if text else " ".join(self.prompt_history + self.response_history).lower()
         print("combined_text adalah :", combined_text)
-        logger_pattern = r"\b(?:pos|afmr|awlr|awr|arr|adr|awqr|avwr|awgc)\s+(?:[a-zA-Z]+\s*){1,4}"
+        logger_pattern = r"\b(?:pos|afmr|awlr|awr|arr|adr|awqr|avwr|awgc|data)\s+(?:[a-zA-Z]+\s*){1,4}"
         logger_match = re.findall(logger_pattern, combined_text)
 
         print("logger_match", logger_match)    
