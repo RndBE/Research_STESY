@@ -3,6 +3,7 @@ import json
 import re
 from ollama import chat # modif 2
 from typing import List, Dict, Optional
+from datetime import datetime, timedelta
 from transformers import BertTokenizer, BertForSequenceClassification
 import torch
 import joblib
@@ -460,10 +461,29 @@ class IntentManager:
         prompt = self.memory.latest_prompt
         print("prompt", prompt)
 
+        # === Ambil target logger
         target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
         print("target_loggers", target_loggers)
         logger_list = fetch_list_logger()
 
+        # === Ekstraksi tanggal dari prompt
+        date_info = extract_date_structured(prompt)
+        print("date_info", date_info)
+
+        # === Validasi: Tidak boleh lebih dari 2 minggu lalu
+        if date_info["awal_tanggal"]:
+            start_date = datetime.strptime(date_info["awal_tanggal"], "%Y-%m-%d")
+            today = datetime.today()
+            max_allowed_start = today - timedelta(days=14)
+
+            if start_date < max_allowed_start:
+                return (
+                    "⚠️ Permintaan data terlalu lama. "
+                    "Sistem hanya mengizinkan pengambilan data maksimal 2 minggu ke belakang dari hari ini.\n"
+                    f"Silakan ubah rentang tanggal menjadi setelah {max_allowed_start.strftime('%Y-%m-%d')}."
+                )
+
+        # === Teruskan jika valid
         return original_fetch_data_range(
             prompt=prompt,
             target_loggers=target_loggers,
