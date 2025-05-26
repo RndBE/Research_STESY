@@ -195,7 +195,6 @@ class PromptProcessedMemory:
                 self.last_date = match.group(0)
                 break
 
-
     def _should_use_memory(self, prompt: str) -> bool:
         prompt = prompt.lower()
         ambiguous_terms = [
