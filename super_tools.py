@@ -109,7 +109,7 @@ def original_fetch_status_logger(prompt: str):
         return f"Terjadi kesalahan saat mengakses API: {str(e)}"
 
 
-def original_fetch_data_range(prompt: str, target_loggers: list, logger_list: list):
+def original_fetch_data_range(prompt: str, target_loggers: list, logger_list: list, matched_parameters: list = None):
     print("prompt :", prompt)
     date_info = extract_date_structured(prompt)
     interval = date_info.get("interval")
@@ -160,6 +160,17 @@ def original_fetch_data_range(prompt: str, target_loggers: list, logger_list: li
                 data = resp.json()
 
                 if isinstance(data, list) and data:
+                    # === Filter parameter jika matched_parameters tersedia
+                    if matched_parameters:
+                        filtered_data = []
+                        for entry in data:
+                            filtered_entry = {
+                                k: v for k, v in entry.items()
+                                if k in matched_parameters or k.lower() in ["id_logger", "waktu"]
+                            }
+                            filtered_data.append(filtered_entry)
+                        data = filtered_data
+
                     summary = summarize_logger_data(logger_name, data)
                     summaries.append(summary)
 
@@ -171,6 +182,7 @@ def original_fetch_data_range(prompt: str, target_loggers: list, logger_list: li
         return "\n\n---\n\n".join(summaries)
     else:
         return "Tidak ditemukan data yang cocok untuk logger yang dimaksud."
+
 
 
 def original_compare_by_date(prompt: str, target_loggers: list, logger_list: list):
@@ -567,13 +579,13 @@ def preprocess_name_list(name_list):
 def normalize_text(text):
     return text.lower().replace("pos", "").replace("logger", "").replace("dan", "").replace("hingga", "").strip()
 
-def find_and_fetch_latest_data(name_list, logger_list, threshold=80, max_candidates=3):
+def find_and_fetch_latest_data(name_list, matched_parameters, logger_list, threshold=80, max_candidates=3):
     results = []
-    
-     # Tambahkan pre-processing
+
+    # Preprocessing nama lokasi
     name_list = preprocess_name_list(name_list)
 
-    normalized_choices = {  
+    normalized_choices = {
         normalize_text(logger['nama_lokasi']): logger
         for logger in logger_list
     }
@@ -588,21 +600,36 @@ def find_and_fetch_latest_data(name_list, logger_list, threshold=80, max_candida
         print("query :", query)
 
         fuzzy_results = process.extract(query, all_logger_names, scorer=fuzz.token_set_ratio, limit=max_candidates)
-
+        
         print(f"\n[DEBUG] Fuzzy match for: '{name_fragment}'")
-        print("=== Fuzzy Matching Results ===")
         for r in fuzzy_results:
             print(f"Match: {r[0]} | Score: {r[1]}")
         print("==============================")
 
-        if not fuzzy_results:
+        if not fuzzy_results or fuzzy_results[0][1] < 40:
             continue
 
-        top_match = fuzzy_results[0]
-        if top_match[1] < threshold:
-            continue
+        best_match = fuzzy_results[0][0]
+        matched_logger = normalized_choices.get(best_match)
 
-        matched_logger = normalized_choices.get(top_match[0])
+        # print(f"\n[DEBUG] Fuzzy match for: '{name_fragment}'")
+        # print("=== Fuzzy Matching Results ===")
+        # for r in fuzzy_results:
+        #     print(f"Match: {r[0]} | Score: {r[1]}")
+        # print("==============================")
+
+        # if not fuzzy_results:
+        #     continue
+
+        # match_name, match_score, _ = fuzzy_results[0]
+        # print(f"match_name : {match_name}, match_score : {match_score}, _ {_}")
+        # # match_name : awr barongan, match_score : 100.0, _ 27
+        # if match_score < threshold:
+        #     continue
+
+        # matched_logger = normalized_choices.get(match_name)
+        print("matched_logger :", matched_logger)
+        # matched_logger = normalized_choices.get(top_match[0])
         if matched_logger:
             logger_id = matched_logger["id_logger"]
             try:
@@ -611,16 +638,90 @@ def find_and_fetch_latest_data(name_list, logger_list, threshold=80, max_candida
                 resp = requests.get(url, timeout=20)
                 resp.raise_for_status()
                 data = resp.json()
+                print("1. Langkah 1")
                 if isinstance(data, list) and len(data) > 0:
+                    latest_entry = data[0]
+                    print("2. Langkah 2")
+                    print("Langkah 3 :", matched_parameters)
+
+                    if matched_parameters:
+                        print("Langkah 4 :", len(matched_parameters))
+                        filtered_entry = {}
+                        for k, v in latest_entry.items():
+                            if k in matched_parameters or k.lower() in ["id_logger", "waktu", "nama_lokasi"]:
+                                # Ambil nilai pertama kalau berupa list
+                                if isinstance(v, list) and len(v) == 1:
+                                    filtered_entry[k] = v[0]
+                                else:
+                                    filtered_entry[k] = v
+                        latest_entry = filtered_entry
+
                     results.append({
                         "logger_name": matched_logger["nama_lokasi"],
                         "logger_id": logger_id,
-                        "data": data[0]
+                        "data": latest_entry
                     })
             except Exception as e:
                 print(f"[ERROR] Gagal fetch data untuk {matched_logger['nama_lokasi']}: {e}")
 
     return results
+
+
+
+# def find_and_fetch_latest_data(name_list, logger_list, threshold=80, max_candidates=3):
+#     results = []
+    
+#      # Tambahkan pre-processing
+#     name_list = preprocess_name_list(name_list)
+
+#     normalized_choices = {  
+#         normalize_text(logger['nama_lokasi']): logger
+#         for logger in logger_list
+#     }
+#     all_logger_names = list(normalized_choices.keys())
+
+#     for name_fragment in name_list:
+#         name_fragment = name_fragment.strip()
+#         if len(name_fragment) < 4:
+#             continue
+
+#         query = normalize_text(name_fragment)
+#         print("query :", query)
+
+#         fuzzy_results = process.extract(query, all_logger_names, scorer=fuzz.token_set_ratio, limit=max_candidates)
+
+#         print(f"\n[DEBUG] Fuzzy match for: '{name_fragment}'")
+#         print("=== Fuzzy Matching Results ===")
+#         for r in fuzzy_results:
+#             print(f"Match: {r[0]} | Score: {r[1]}")
+#         print("==============================")
+
+#         if not fuzzy_results:
+#             continue
+
+#         top_match = fuzzy_results[0]
+#         if top_match[1] < threshold:
+#             continue
+
+#         matched_logger = normalized_choices.get(top_match[0])
+#         if matched_logger:
+#             logger_id = matched_logger["id_logger"]
+#             try:
+#                 url = f"https://dpupesdm.monitoring4system.com/api/data_new?id_logger={logger_id}"
+#                 print(f"[FETCH] {matched_logger['nama_lokasi']} → {url}")
+#                 resp = requests.get(url, timeout=20)
+#                 resp.raise_for_status()
+#                 data = resp.json()
+#                 if isinstance(data, list) and len(data) > 0:
+#                     results.append({
+#                         "logger_name": matched_logger["nama_lokasi"],
+#                         "logger_id": logger_id,
+#                         "data": data[0]
+#                     })
+#             except Exception as e:
+#                 print(f"[ERROR] Gagal fetch data untuk {matched_logger['nama_lokasi']}: {e}")
+
+#     return results
 
 def find_closest_logger(name_fragment, logger_list, threshold=40, max_candidates=3):
     name_fragment = name_fragment.strip()

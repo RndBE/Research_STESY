@@ -107,6 +107,7 @@ test_queries = [
 ]
 
 neo_test_prompts = [
+    "Berikan informasi tekanan udara dari ARR Gemawang", # show_logger_data
     "berikan data pos awlr seturan 3 hari terakhir ", # fetch_logger_by_date
     "tampilkan data pos awlr seturan 10 hari terakhir ", # fetch_logger_by_date
     "Bagaimana ringkasan kelembaban udara minggu lalu di Pos ARR Kemput?",  # analyze_logger_by_date

@@ -31,10 +31,13 @@ class PromptProcessedMemory:
         self.last_date: Optional[str] = None
         self.intent: Optional[str] = None
         self.analysis_result: Optional[str] = None
+        self.last_data: Optional[str] = None  # ✅ Untuk analisa tanpa perlu fetch ulang
 
         self.prev_intent: Optional[str] = None
         self.prev_target: Optional[str] = None
         self.prev_date: Optional[str] = None
+
+        # self.logger_list = logger_list  # ✅ Perubahan: Simpan logger_list sebagai atribut
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         try:
@@ -417,24 +420,39 @@ class IntentManager:
         print(f"Dari Prompt {prompt} Intent adalah : {intent}, target logger adalah : {target}, tanggal yang dicari adalah : {date}")
         func = self.intent_map.get(intent, self.fallback_response)
         return func()
-
+    
     def fetch_latest_data(self):
         print("show_logger_data ini telah berjalan")
-        prompt = self.memory.latest_prompt
+        prompt = self.memory.latest_prompt.lower()
+        data_last = self.memory.last_data
 
-        print("self.memory.last_logger_list ",self.memory.last_logger_list)
+        print(f"Data Terakhir adalah : {data_last}")
+        print("self.memory.last_logger_list ", self.memory.last_logger_list)
         print(f"Type data dari self.memory.last_logger_list adalah {type(self.memory.last_logger_list)}")
         print(f"Panjang data dari self.memory.last_logger_list adalah {len(self.memory.last_logger_list)}")
-        print("self.memory.last_logger ",self.memory.last_logger)
+        print("self.memory.last_logger ", self.memory.last_logger)
 
-        target_loggers = self.memory.last_logger_list or [self.memory.last_logger] # Error no
+        target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
         logger_list = fetch_list_logger()
 
         if not target_loggers or not logger_list:
             return "Target logger atau daftar logger tidak tersedia."
 
-        fetched = find_and_fetch_latest_data(target_loggers, logger_list)
-        print("fetched data adalah :",fetched)
+        # === DETEKSI PARAMETER YANG DIMINTA DI DALAM PROMPT ===
+        matched_parameters = []
+        for param, aliases in sensor_aliases.items():
+            for alias in aliases:
+                if alias in prompt:
+                    matched_parameters.append(param)
+                    break
+
+        print("Matched Parameters:", matched_parameters)
+        print("Matched Parameters Type:", type(matched_parameters))
+        print("Matched Parameters Length:", len(matched_parameters))
+
+        # === FETCH DATA TERBARU ===
+        fetched = find_and_fetch_latest_data(target_loggers, matched_parameters,logger_list)
+        print("fetched data adalah :", fetched)
 
         summaries = []
         for item in fetched:
@@ -444,6 +462,35 @@ class IntentManager:
             summaries.append(summary)
 
         return "\n\n---\n\n".join(summaries)
+
+    # def fetch_latest_data(self):
+    #     print("show_logger_data ini telah berjalan")
+    #     prompt = self.memory.latest_prompt
+    #     data_last = self.memory.last_data
+
+    #     print(f"Data Terakhir adalah : {data_last}")
+    #     print("self.memory.last_logger_list ",self.memory.last_logger_list)
+    #     print(f"Type data dari self.memory.last_logger_list adalah {type(self.memory.last_logger_list)}")
+    #     print(f"Panjang data dari self.memory.last_logger_list adalah {len(self.memory.last_logger_list)}")
+    #     print("self.memory.last_logger ",self.memory.last_logger)
+
+    #     target_loggers = self.memory.last_logger_list or [self.memory.last_logger] # Error no
+    #     logger_list = fetch_list_logger()
+
+    #     if not target_loggers or not logger_list:
+    #         return "Target logger atau daftar logger tidak tersedia."
+
+    #     fetched = find_and_fetch_latest_data(target_loggers, logger_list)
+    #     print("fetched data adalah :",fetched)
+
+    #     summaries = []
+    #     for item in fetched:
+    #         nama_lokasi = item['logger_name']
+    #         data = item['data']
+    #         summary = summarize_logger_data(nama_lokasi, data)
+    #         summaries.append(summary)
+
+    #     return "\n\n---\n\n".join(summaries)
 
         # if not fetched:
         #     return "Tidak ditemukan data untuk logger yang disebutkan."
@@ -483,14 +530,27 @@ class IntentManager:
                     f"Silakan ubah rentang tanggal menjadi setelah {max_allowed_start.strftime('%Y-%m-%d')}."
                 )
 
+         # === Deteksi parameter dari prompt (sensor yang ingin ditampilkan)
+        matched_parameters = []
+        for param, aliases in sensor_aliases.items():
+            for alias in aliases:
+                if alias in prompt:
+                    matched_parameters.append(param)
+                    break
+        print("matched_parameters:", matched_parameters)
+
         # === Teruskan jika valid
         return original_fetch_data_range(
             prompt=prompt,
             target_loggers=target_loggers,
-            logger_list=logger_list
+            logger_list=logger_list,
+            matched_parameters=matched_parameters  # <-- tambahkan ini ke original_fetch_data_range
         )
 
     def fetch_status_logger(self):
+        data_last = self.memory.last_data
+
+        print(f"Data Terakhir adalah : {data_last}")
         return original_fetch_status_logger(prompt=self.memory.latest_prompt)
 
     def show_list_logger(self):
@@ -589,7 +649,6 @@ class IntentManager:
 
         return response['message']['content']
 
-
     def show_selected_parameter(self):
         print("show_selected_parameter ini telah berjalan")
         prompt = self.memory.latest_prompt.lower()
@@ -680,16 +739,29 @@ class IntentManager:
         target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
         logger_list = fetch_list_logger()
 
+        print("prompt :", prompt)
+        print("target loggers HEHE:", target_loggers)
+        print("self.memory.last_data :", self.memory.last_data)
+
         if self.memory.analysis_result:
             print("[INFO] Menggunakan hasil analisis dari memory")
             return self.memory.analysis_result
 
-        fetched_data = self.fetch_data_range()
+        if self.memory.last_data:
+            print("[INFO] Menggunakan last_data dari memory")
 
-        if isinstance(fetched_data, str):
-            return fetched_data
+            fetched_data = self.memory.last_data
+        else:
+            print("[INFO] Tidak ditemukan last_data, mencoba fetch ulang")
+            fetched_data = self.fetch_data_range()
 
-        self.memory.last_data = fetched_data
+            if isinstance(fetched_data, str):
+                print("[ERROR] Gagal fetch ulang, response:", fetched_data)
+                return fetched_data  # e.g. "Tanggal tidak dikenali..."
+
+            self.memory.last_data = fetched_data
+            self.memory._save_user_memory()  # ✅ Tambahan di sini
+            print("[INFO] Data berhasil di-fetch dan disimpan ke memory")
 
         summary_prompt = {
             "role": "user",
@@ -698,6 +770,8 @@ class IntentManager:
 
         result = general_stesy(messages=[summary_prompt])
         self.memory.analysis_result = result
+        self.memory._save_user_memory()
+
         return result
 
     def connection_status(self):
