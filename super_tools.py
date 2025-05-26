@@ -521,7 +521,7 @@ def summarize_logger_data(nama_lokasi, latest_data, model_name="llama3.1:8b"):
         f"Status koneksi logger: {koneksi}.\n\n"
         f"Berikut adalah semua parameter yang tersedia:\n\n"
         f"{parameter_text}\n\n"
-        "JANGAN tambahkan kesimpulan atau penjelasan.\n"
+        "tambahkan kesimpulan atau penjelasan singkat.\n"
         "Cukup tampilkan semua data dalam urutan seperti yang diberikan.\n"
         f"Awali dengan judul: **Data Monitoring Telemetri {nama_lokasi}**\n"
         "Tambahkan garis pemisah '=====' di bawah judul."
@@ -613,11 +613,7 @@ def find_and_fetch_latest_data(name_list, logger_list, threshold=80, max_candida
             except Exception as e:
                 print(f"[ERROR] Gagal fetch data untuk {matched_logger['nama_lokasi']}: {e}")
 
-    if not results:
-        # Kembalikan dict khusus jika tidak ada hasil
-        return {"not_found": True}
-
-    return {"not_found": False, "results": results}
+    return results
 
 def find_closest_logger(name_fragment, logger_list, threshold=40, max_candidates=3):
     name_fragment = name_fragment.strip()

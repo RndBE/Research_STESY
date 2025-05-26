@@ -434,23 +434,6 @@ class IntentManager:
 
         fetched = find_and_fetch_latest_data(target_loggers, logger_list)
         print("fetched data adalah :",fetched)
-        system_prompt = (
-            "Kamu adalah asisten cerdas yang menjawab pertanyaan berdasarkan data logger cuaca. "
-            "Berikan jawaban yang singkat, jelas, dan sesuai dengan permintaan pengguna."
-        )
-
-        if fetched.get("not_found"):
-            # Jika tidak ditemukan, minta LLaMA buat jawaban manusiawi untuk kasus ini
-            response = chat(
-                model='llama3.1:8b',
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"{prompt}\n\nMaaf, pos yang Anda cari tidak ditemukan dalam data logger kami."}
-                ]
-            )
-            return response['message']['content']
-
-        fetched = fetched["results"]
 
         summaries = []
         for item in fetched:
