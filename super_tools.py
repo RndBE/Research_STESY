@@ -22,7 +22,8 @@ sensor_aliases = {
     "Temperatur_Udara": ["temperatur udara", "suhu udara", "air temperature", "udara panas", "temperatur", "udara temperatur", "tingkat panas udara", "derajat suhu", "tingkat suhu", "temperature", "cuaca panas", "suhu lingkungan", "panas udara", "suhu"],
     "Kelembaban_Udara": ["kelembaban udara", "humidity air", "kadar air udara", "udara lembab", "kelembaban", "udara kelembaban", "kelembapan", "kelembapan udara", "tingkat kelembaban", "humidity", "kadar kelembaban", "kelembaban lingkungan", "kelembaban relatif", "lembab", "lembap"],
     "Tekanan_Udara": ["tekanan udara", "pressure", "air pressure", "barometer"],
-    "Kelembaban_Logger": ["kelembaban logger", "humidity logger", "logger kelembaban", "logger humidity"]
+    "Kelembaban_Logger": ["kelembaban logger", "humidity logger", "logger kelembaban", "logger humidity"],
+    "Koneksi": ["koneksi", "terputus", "terhubung", "aktif","status koneksi", "tersambung", "tidak terhubung","offline", "online", "disconnect", "connect", "penghubung", "sinyal", "signal", "mati", "hidup", "jaringan", "network"]
 }
 
 def general_stesy(messages, model_name="llama3.1:8b"):
@@ -547,13 +548,26 @@ def summarize_logger_data(nama_lokasi, latest_data, model_name="llama3.1:8b"):
     return response["message"]["content"]
 
 
+def preprocess_name_list(name_list):
+    new_list = []
+    for name in name_list:
+        # Replace " dan " with comma, then split
+        name = name.lower().replace(" dan ", ",").replace(" & ", ",")
+        parts = [part.strip() for part in name.split(",") if part.strip()]
+        new_list.extend(parts)
+    return new_list
+
+
 def normalize_text(text):
-    return text.lower().replace("pos", "").replace("logger", "").strip()
+    return text.lower().replace("pos", "").replace("logger", "").replace("dan", "").replace("hingga", "").strip()
 
 def find_and_fetch_latest_data(name_list, logger_list, threshold=40, max_candidates=3):
     results = []
+    
+     # Tambahkan pre-processing
+    name_list = preprocess_name_list(name_list)
 
-    normalized_choices = {
+    normalized_choices = {  
         normalize_text(logger['nama_lokasi']): logger
         for logger in logger_list
     }
@@ -565,6 +579,8 @@ def find_and_fetch_latest_data(name_list, logger_list, threshold=40, max_candida
             continue
 
         query = normalize_text(name_fragment)
+        print("query :", query)
+
         fuzzy_results = process.extract(query, all_logger_names, scorer=fuzz.token_set_ratio, limit=max_candidates)
 
         print(f"\n[DEBUG] Fuzzy match for: '{name_fragment}'")
@@ -633,13 +649,13 @@ def find_closest_logger(name_fragment, logger_list, threshold=40, max_candidates
         return None
 
 
-def fetch_list_logger_from_prompt_flexibleV1(user_prompt: str): # Function ini sebagai acuan
-
+def fetch_list_logger_from_prompt_flexibleV1(user_prompt: str):
     print("show_list_logger ini telah berjalan untuk mendapatkan lokasi pos di daerah yang disebutkan")
+
     # Daftar kabupaten yang didukung
     kabupaten_list = ['Sleman', 'Bantul', 'Kulon Progo', 'Gunung Kidul']
 
-    # Ekstraksi nama kabupaten dari prompt dengan fleksibilitas tinggi
+    # Fungsi ekstraksi kabupaten dari prompt dengan case-insensitive
     def extract_kabupaten(prompt: str) -> str:
         prompt = prompt.lower()
         for kab in kabupaten_list:
@@ -650,25 +666,37 @@ def fetch_list_logger_from_prompt_flexibleV1(user_prompt: str): # Function ini s
     # Ekstrak kabupaten dari prompt
     kabupaten = extract_kabupaten(user_prompt)
 
-    # Baca file CSV
-    loggers = [] # 
-    with open("loggers.csv", newline='', encoding='utf-8') as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            loggers.append({
-                "id_logger": row.get("id_logger"),
-                "nama_lokasi": row.get("nama_lokasi"),
-                "latitude": row.get("latitude"),
-                "longitude": row.get("longitude"),
-                "alamat": row.get("alamat"),
-                "kabupaten": row.get("kabupaten")
-            })
+    # Fetch data dari API
+    url = "https://dpupesdm.monitoring4system.com/api/list_logger"
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        loggers = response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching logger data: {e}")
+        return []
 
-    # Konversi ke DataFrame dan filter berdasarkan kabupaten
-    df = pd.DataFrame(loggers)
+    # Jika ingin pastikan hanya field yang diperlukan
+    filtered_loggers = []
+    for row in loggers:
+        filtered_loggers.append({
+            "id_logger": row.get("id_logger"),
+            "nama_lokasi": row.get("nama_lokasi"),
+            "latitude": row.get("latitude"),
+            "longitude": row.get("longitude"),
+            "alamat": row.get("alamat"),
+            "kabupaten": row.get("kabupaten"),
+            "koneksi": row.get("koneksi")  # kalau ingin menampilkan koneksi juga
+        })
+
+    # Buat DataFrame dari list
+    df = pd.DataFrame(filtered_loggers)
+
+    # Filter DataFrame berdasarkan kabupaten, jika ditemukan
     if kabupaten:
         df = df[df['kabupaten'].str.lower() == kabupaten.lower()]
 
+    # Kembalikan sebagai list dict
     return df.to_dict(orient='records')
 
 def fetch_data_range(id_logger, start_date, end_date, interval="hari"):
@@ -680,21 +708,31 @@ def fetch_data_range(id_logger, start_date, end_date, interval="hari"):
 import pandas as pd
 
 def fetch_list_logger():
-    loggers = []
-    # Membaca file CSV dengan kolom tambahan yang diperlukan C:/Users/fadel/Downloads/LLMBasedAssistant/EndThis/data/loggers.csv
-    with open("loggers.csv", newline='', encoding='utf-8') as csvfile: # merubah path loggers.csv
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            loggers.append({
+    url = "https://dpupesdm.monitoring4system.com/api/list_logger"
+    
+    try:
+        response = requests.get(url, timeout=10)  # tambahkan timeout untuk mencegah hanging
+        response.raise_for_status()  # akan melempar error kalau status code bukan 2xx
+        loggers = response.json()
+
+        # Pastikan hanya field yang kita butuhkan
+        cleaned_loggers = []
+        for row in loggers:
+            cleaned_loggers.append({
                 "id_logger": row.get("id_logger"),
                 "nama_lokasi": row.get("nama_lokasi"),
                 "latitude": row.get("latitude"),
                 "longitude": row.get("longitude"),
                 "alamat": row.get("alamat"),
-                "kabupaten": row.get("kabupaten")
+                "kabupaten": row.get("kabupaten"),
+                "koneksi": row.get("koneksi")
             })
-        # df = pd.DataFrame(loggers)
-    return loggers
+
+        return cleaned_loggers
+
+    except requests.RequestException as e:
+        print(f"Error fetching logger data: {e}")
+        return []
 
 def fetch_latest_data(id_logger):
     url = f"https://dpupesdm.monitoring4system.com/api/data_new?id_logger={id_logger}"
