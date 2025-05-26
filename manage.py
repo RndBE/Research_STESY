@@ -388,29 +388,33 @@ class IntentManager:
             "ai_limitation": self.ai_limitation
         }
 
+    # def handle_intent(self):
+    #     prompt = self.memory.latest_prompt
+    #     intent = self.memory.intent
+    #     target = self.memory.last_logger_list or [self.memory.last_logger]
+    #     date = self.memory.last_date
+
+    #     # ✅ Kirim parameter lengkap ke validator
+    #     print(f"Dari Prompt {prompt} Intent adalah : {intent}, target logger adalah : {target}, tanggal yang dicari adalah : {target}")
+        
+    #     validator = PromptValidator(prompt, intent, target, date)
+    #     print("validator :",validator.should_fallback_to_ai())
+    #     if validator.should_fallback_to_ai():
+    #         print("[INFO] Prompt ambigu atau intent tidak cocok, gunakan smart_respond()")
+    #         return self.smart_respond()
+
+    #     func = self.intent_map.get(intent, self.fallback_response)
+    #     return func()
+    
     def handle_intent(self):
         prompt = self.memory.latest_prompt
         intent = self.memory.intent
         target = self.memory.last_logger_list or [self.memory.last_logger]
         date = self.memory.last_date
 
-        # ✅ Kirim parameter lengkap ke validator
-        print(f"Dari Prompt {prompt} Intent adalah : {intent}, target logger adalah : {target}, tanggal yang dicari adalah : {target}")
-        
-        validator = PromptValidator(prompt, intent, target, date)
-        print("validator :",validator.should_fallback_to_ai())
-        if validator.should_fallback_to_ai():
-            print("[INFO] Prompt ambigu atau intent tidak cocok, gunakan smart_respond()")
-            return self.smart_respond()
-
+        print(f"Dari Prompt {prompt} Intent adalah : {intent}, target logger adalah : {target}, tanggal yang dicari adalah : {date}")
         func = self.intent_map.get(intent, self.fallback_response)
         return func()
-    
-    # def handle_intent(self):
-    #     intent = self.memory.intent
-    #     print(intent)
-    #     func = self.intent_map.get(intent, self.fallback_response)
-    #     return func()
 
     def fetch_latest_data(self):
         print("show_logger_data ini telah berjalan")
@@ -642,10 +646,6 @@ class IntentManager:
         )
         return response['message']['content']
 
-
-
-
-
     def get_photo_path(self):
         return "Menjalankan get_photo_path"
 
@@ -678,66 +678,11 @@ class IntentManager:
         result = general_stesy(messages=[summary_prompt])
         self.memory.analysis_result = result
         return result
-    
-    # === Fungsi smart_respond untuk IntentManager ===
-    def smart_respond(self):
-        prompt = self.memory.latest_prompt
-        print("+++++ Function smart_respond Berjalan +++++")
-        print("prompt:", prompt)
-
-        unavailable_features = [
-            "get_logger_photo_path", "compare_across_loggers", "show_selected_parameter", "explain_system"
-        ]
-        if self.memory.intent in unavailable_features:
-            return f"Fitur untuk `{self.memory.intent}` belum tersedia saat ini. Silakan gunakan perintah lain seperti menampilkan data logger, status hujan, atau analisis data."
-
-        validator = PromptValidator(prompt, self.memory.intent, self.memory.last_logger_list or [self.memory.last_logger], self.memory.last_date)
-
-        if validator.is_ambiguous_prompt():
-            return (
-                "Saya mendeteksi bahwa pertanyaan Anda masih kurang jelas. "
-                "Coba berikan informasi lebih lengkap, seperti:\n\n"
-                "- 'Tampilkan data terbaru dari ARR Gemawang'\n"
-                "- 'Bagaimana status hujan di AWR Beji?'\n"
-                "- 'Berikan perbandingan data kelembaban minggu ini'\n\n"
-                "Saya siap membantu jika pertanyaannya lebih spesifik."
-            )
-
-        if validator.is_intent_mismatch():
-            return (
-                f"Sepertinya sistem memprediksi intent Anda sebagai `{self.memory.intent}`, "
-                "tetapi isi pertanyaannya tidak sepenuhnya cocok.\n\n"
-                "Silakan cek kembali prompt Anda. Apakah maksud Anda ingin menampilkan data terbaru atau menganalisis tren?\n"
-                "Contoh:\n- 'Tampilkan data hari ini dari ARR Hargorejo'\n- 'Bandingkan kelembaban antara dua logger'"
-            )
-
-        if validator.is_missing_required_fields():
-            return (
-                "Saya tidak menemukan lokasi logger atau tanggal yang disebutkan dalam pertanyaan Anda sesuai dengan kebutuhan intent.\n"
-                "Silakan lengkapi prompt Anda, misalnya:\n- 'Tampilkan data dari ARR Gemawang'\n- 'Ambil data tanggal 1 Mei dari AWR Kaliurang'"
-            )
-
-        messages = [
-            {
-                "role": "system",
-                "content": (
-                    "Anda adalah asisten telemetri STESY. Jawablah pertanyaan ringan dengan ramah dan informatif.\n"
-                    "Jika pertanyaan terlalu umum atau tidak spesifik, minta klarifikasi dengan sopan.\n"
-                    "Jika pengguna menyebut fitur yang belum tersedia, beri tahu dengan jujur.\n"
-                )
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
-
-        response = chat(model="llama3.1:8b", messages=messages)
-        return response["message"]["content"]
 
     def ai_limitation(self):
         prompt = self.memory.latest_prompt
         model_name = "llama3.1:8b"
+        print("Intent deteksi limitation berjalan")
 
         messages_llm = [
             {
