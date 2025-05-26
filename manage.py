@@ -686,17 +686,15 @@ class IntentManager:
         if not logger_list:
             return "Daftar logger tidak tersedia."
 
-        # Deteksi parameter
-        selected_param = None
+        # Deteksi parameter dari sensor_aliases → matched_parameters (bisa lebih dari satu jika perlu)
+        matched_parameters = []
         for param_key, aliases in sensor_aliases.items():
             for alias in aliases:
                 if alias.lower() in prompt:
-                    selected_param = param_key
-                    break
-            if selected_param:
-                break
+                    matched_parameters.append(param_key)
+                    break  # Hanya ambil satu alias per param_key
 
-        if not selected_param:
+        if not matched_parameters:
             return "Parameter tidak dikenali. Silakan sebutkan suhu udara, kelembaban udara, curah hujan, atau tekanan udara."
 
         # Deteksi rentang tanggal
@@ -707,16 +705,22 @@ class IntentManager:
         target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
         print("Target logger:", target_loggers)
 
-        # Jika tidak ada tanggal, anggap permintaan data saat ini
+        # Jika tidak ada tanggal, ambil data terkini dari logger
         if not date_info.get("awal_tanggal") or not date_info.get("akhir_tanggal"):
-            fetched = find_and_fetch_latest_data(target_loggers, logger_list)
+            fetched = find_and_fetch_latest_data(
+                name_list=target_loggers,
+                matched_parameters=matched_parameters,
+                logger_list=logger_list
+            )
+
             summaries = []
             for item in fetched:
                 logger_name = item['logger_name']
-                value = item['data'].get(selected_param, "Data tidak tersedia")
-                summaries.append(f"{logger_name}: {selected_param} = {value}")
-            
-            # Gabungkan data jadi konteks untuk LLaMA
+                for param in matched_parameters:
+                    value = item['data'].get(param, "Data tidak tersedia")
+                    summaries.append(f"{logger_name}: {param} = {value}")
+
+            # Gabungkan jadi konteks untuk LLaMA
             context_data = "\n".join(summaries)
 
             system_prompt = (
@@ -724,7 +728,6 @@ class IntentManager:
                 "Berikan jawaban yang jelas dan sesuai dengan permintaan pengguna seperti nama pos dan parameter yang diminta."
             )
 
-            # Panggil LLaMA chat dengan konteks data dan pertanyaan asli
             response = chat(
                 model='llama3.1:8b',
                 messages=[
@@ -734,14 +737,13 @@ class IntentManager:
             )
             return response['message']['content']
 
-        # Jika ada rentang tanggal, ambil data range
+        # Jika ada rentang tanggal, gunakan original_fetch_data_range
         summaries = original_fetch_data_range(
             prompt=self.memory.latest_prompt,
             target_loggers=target_loggers,
             logger_list=logger_list
         )
 
-        # Bisa juga kirim data ringkas ini ke LLaMA agar jawabannya lebih natural
         system_prompt = (
             "Kamu adalah asisten cerdas yang menjawab pertanyaan berdasarkan data logger. "
             "Berikan jawaban yang jelas dan sesuai dengan permintaan pengguna seperti nama pos dan parameter yang diminta."
@@ -754,6 +756,7 @@ class IntentManager:
             ]
         )
         return response['message']['content']
+
 
     def get_photo_path(self):
         return "Menjalankan get_photo_path"
