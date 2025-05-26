@@ -288,7 +288,7 @@ import torch
 import re
 from transformers import BertTokenizer, BertForSequenceClassification
 import joblib
-from super_tools import original_fetch_data_range, find_and_fetch_latest_data, fetch_list_logger_from_prompt_flexibleV1, original_fetch_status_logger, fetch_list_logger, original_compare_by_date, extract_date_structured, general_stesy, summarize_logger_data
+from super_tools import original_fetch_data_range, find_and_fetch_latest_data, fetch_list_logger_from_prompt_flexibleV1, original_fetch_status_logger, fetch_list_logger, original_compare_by_date, extract_date_structured, general_stesy, summarize_logger_data, extreme_keywords, is_extreme_only
 
 class PromptValidator:
     INTENT_REQUIREMENTS = {
@@ -538,6 +538,24 @@ class IntentManager:
         if not logger_list:
             return "Daftar logger tidak tersedia."
 
+        # Cek apakah hanya ada nilai ekstrem tanpa sensor alias
+        if is_extreme_only(prompt, sensor_aliases):
+            system_prompt = (
+                "Kamu adalah asisten cerdas yang membantu pengguna memahami pertanyaan. "
+                "Pertanyaan yang diterima hanya menyebut nilai ekstrem tanpa menyebut parameter sensor. "
+                "Tolong minta pengguna untuk menjelaskan data apa yang ingin ditampilkan, misalnya suhu udara, curah hujan, kelembaban, dan sebagainya. "
+                "Ingat, sistem hanya dapat menampilkan data untuk hari ini, data terbaru, atau rentang 24 jam terakhir. "
+                "Data untuk waktu tertentu seperti 'kemarin', 'minggu lalu', atau rentang waktu spesifik tidak tersedia."
+            )
+            response = chat(
+                model='llama3.1:8b',
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            return response['message']['content']
+
         # Cek parameter berdasarkan sensor_aliases
         selected_param = None
         for param_key, aliases in sensor_aliases.items():
@@ -568,19 +586,18 @@ class IntentManager:
             value = item["data"].get(selected_param, "Data tidak tersedia")
             comparison_data.append(f"{logger_name}: {value}")
 
-        # Prompt sistem
+        # Prompt sistem untuk kasus normal dan ekstrem + sensor
         system_prompt = (
             "Kamu adalah asisten cerdas yang menjawab pertanyaan berdasarkan data logger cuaca. "
             "Jika pengguna menanyakan yang berkaitan dengan kondisi ekstrem seperti 'terdingin', 'paling panas', 'terbasah', 'paling', 'tertinggi', atau 'terendah', "
             "berikan jawaban hanya untuk satu pos dengan nilai ekstrem tersebut beserta nama pos dan nilai parameternya. "
-            "Untuk permintaan lain, berikan jawaban yang jelas dan sesuai dengan semua data pos yang relevan."
+            "Untuk permintaan lain, berikan jawaban yang jelas dan sesuai dengan semua data pos yang relevan. "
+            "Catatan penting: Sistem hanya dapat menampilkan data untuk hari ini, data terbaru, atau dalam rentang 24 jam terakhir. "
+            "Data untuk waktu tertentu seperti 'kemarin', 'minggu lalu', atau rentang waktu spesifik tidak tersedia dan tidak dapat ditampilkan."
         )
 
-
-        # Pertanyaan asli dan data perbandingan
         context_data = "\n".join(comparison_data)
 
-        # Panggil Ollama
         response = chat(
             model='llama3.1:8b',
             messages=[
@@ -590,6 +607,7 @@ class IntentManager:
         )
 
         return response['message']['content']
+
 
 
     def show_selected_parameter(self):
