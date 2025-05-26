@@ -118,7 +118,7 @@ def original_fetch_status_logger(prompt: str):
         return f"Terjadi kesalahan saat mengakses API: {str(e)}"
 
 
-def original_fetch_data_range(prompt: str, target_loggers: list, logger_list: list, matched_parameters: list = None):
+def original_fetch_data_range(prompt: str, target_loggers: list, matched_parameters: list, logger_list: list ):
     print("prompt :", prompt)
     date_info = extract_date_structured(prompt)
     interval = date_info.get("interval")
@@ -194,8 +194,9 @@ def original_fetch_data_range(prompt: str, target_loggers: list, logger_list: li
 
 
 
-def original_compare_by_date(prompt: str, target_loggers: list, logger_list: list):
-    return original_fetch_data_range(prompt, target_loggers, logger_list)
+def original_compare_by_date(prompt: str, target_loggers: list, matched_parameters: list, logger_list: list ):
+    return original_fetch_data_range(prompt, target_loggers, matched_parameters, logger_list)
+    # return original_fetch_data_range(prompt, target_loggers, logger_list)
 
 
 def find_closest_logger(name_fragment, logger_list, threshold=40, max_candidates=3):

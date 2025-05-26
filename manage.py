@@ -108,22 +108,76 @@ class PromptProcessedMemory:
         pred = torch.argmax(outputs.logits, dim=1)
         return self.label_encoder.inverse_transform(pred.cpu().numpy())[0]
 
+    # def _extract_context_memory(self, text: Optional[str] = None):
+    #     combined_text = text.lower() if text else " ".join(self.prompt_history + self.response_history).lower()
+    #     print("combined_text adalah :", combined_text)
+    #     logger_pattern = r"\b(?:pos|afmr|awlr|awr|arr|adr|awqr|avwr|awgc|data)\s+(?:[a-zA-Z]+\s*){1,4}"
+    #     logger_match = re.findall(logger_pattern, combined_text)
+
+    #     print("logger_match", logger_match)    
+
+    #     if logger_match:
+    #         self.last_logger = logger_match[-1].strip()
+    #         self.last_logger_list = [match.strip() for match in logger_match]
+
+    #     date_keywords = [
+    #         "hari ini", "kemarin", "kemaren", "minggu ini", "minggu lalu", "bulan lalu",
+    #         "awal bulan", "akhir bulan", "tahun lalu",
+    #         "minggu terakhir", "bulan terakhir", "hari terakhir"
+    #     ]
+    #     for phrase in date_keywords:
+    #         if phrase in combined_text:
+    #             self.last_date = phrase
+    #             break
+
+    #     relative_date_patterns = [
+    #         r"\d+\s+hari\s+(lalu|terakhir)",
+    #         r"\d+\s+minggu\s+(lalu|terakhir)",
+    #         r"\d+\s+bulan\s+(lalu|terakhir)"
+    #     ]
+    #     for pattern in relative_date_patterns:
+    #         match = re.search(pattern, combined_text)
+    #         if match:
+    #             self.last_date = match.group(0)
+    #             break
+
     def _extract_context_memory(self, text: Optional[str] = None):
+
+        def normalize_logger_name(name: str) -> str:
+            return " ".join(name.strip().lower().split())
+        
         combined_text = text.lower() if text else " ".join(self.prompt_history + self.response_history).lower()
         print("combined_text adalah :", combined_text)
-        logger_pattern = r"\b(?:pos|afmr|awlr|awr|arr|adr|awqr|avwr|awgc|data)\s+(?:[a-zA-Z]+\s*){1,4}"
-        logger_match = re.findall(logger_pattern, combined_text)
 
-        print("logger_match", logger_match)    
+        # === Ambil daftar nama lokasi dari fetch_list_logger
+        try:
+            logger_data = fetch_list_logger()
+            logger_names_from_db = [normalize_logger_name(lg["nama_lokasi"]) for lg in logger_data if "nama_lokasi" in lg]
+            normalized_valid_loggers = set(logger_names_from_db)
+        except Exception as e:
+            print("[ERROR] Gagal mengambil daftar logger dari fetch_list_logger()", e)
+            normalized_valid_loggers = set()
 
-        if logger_match:
-            self.last_logger = logger_match[-1].strip()
-            self.last_logger_list = [match.strip() for match in logger_match]
+        # === Regex deteksi logger
+        logger_pattern = r"\b(?:pos|afmr|awlr|awr|arr|adr|awqr|avwr|awgc)\s+(?:[a-z]{3,}\s*){1,4}"
+        raw_matches = re.findall(logger_pattern, combined_text)
+        print("logger_match (raw)", raw_matches)
 
+        # === Bersihkan dan validasi
+        cleaned_matches = set()
+        for match in raw_matches:
+            norm = normalize_logger_name(match)
+            if norm in normalized_valid_loggers:
+                cleaned_matches.add(norm)
+
+        if cleaned_matches:
+            self.last_logger_list = list(cleaned_matches)
+            self.last_logger = self.last_logger_list[-1]
+
+        # === Ekstraksi tanggal
         date_keywords = [
             "hari ini", "kemarin", "kemaren", "minggu ini", "minggu lalu", "bulan lalu",
-            "awal bulan", "akhir bulan", "tahun lalu",
-            "minggu terakhir", "bulan terakhir", "hari terakhir"
+            "awal bulan", "akhir bulan", "tahun lalu", "minggu terakhir", "bulan terakhir", "hari terakhir"
         ]
         for phrase in date_keywords:
             if phrase in combined_text:
