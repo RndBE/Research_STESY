@@ -571,7 +571,7 @@ class IntentManager:
         # Prompt sistem
         system_prompt = (
             "Kamu adalah asisten cerdas yang menjawab pertanyaan berdasarkan data logger cuaca. "
-            "Jika pengguna menanyakan yang berkaitan dengan kondisi ekstrem seperti 'terdingin', 'paling panas', 'terbasah', 'tertinggi', atau 'terendah', "
+            "Jika pengguna menanyakan yang berkaitan dengan kondisi ekstrem seperti 'terdingin', 'paling panas', 'terbasah', 'paling', 'tertinggi', atau 'terendah', "
             "berikan jawaban hanya untuk satu pos dengan nilai ekstrem tersebut beserta nama pos dan nilai parameternya. "
             "Untuk permintaan lain, berikan jawaban yang jelas dan sesuai dengan semua data pos yang relevan."
         )
