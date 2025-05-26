@@ -631,8 +631,8 @@ class IntentManager:
             context_data = "\n".join(summaries)
 
             system_prompt = (
-                "Kamu adalah asisten cerdas yang menjawab pertanyaan berdasarkan data logger cuaca. "
-                "Berikan jawaban yang singkat, jelas, dan sesuai dengan permintaan pengguna."
+                "Kamu adalah asisten cerdas yang menjawab pertanyaan berdasarkan data logger. "
+                "Berikan jawaban yang jelas dan sesuai dengan permintaan pengguna seperti nama pos dan parameter yang diminta."
             )
 
             # Panggil LLaMA chat dengan konteks data dan pertanyaan asli
@@ -654,8 +654,8 @@ class IntentManager:
 
         # Bisa juga kirim data ringkas ini ke LLaMA agar jawabannya lebih natural
         system_prompt = (
-            "Kamu adalah asisten cerdas yang menjawab pertanyaan berdasarkan data logger cuaca. "
-            "Berikan jawaban yang singkat, jelas, dan sesuai dengan permintaan pengguna."
+            "Kamu adalah asisten cerdas yang menjawab pertanyaan berdasarkan data logger. "
+            "Berikan jawaban yang jelas dan sesuai dengan permintaan pengguna seperti nama pos dan parameter yang diminta."
         )
         response = chat(
             model='llama3.1:8b',
