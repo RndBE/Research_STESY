@@ -420,19 +420,25 @@ class IntentManager:
         print("show_logger_data ini telah berjalan")
         prompt = self.memory.latest_prompt
 
-        print("self.memory.last_logger_list ",self.memory.last_logger_list)
+        print("self.memory.last_logger_list ", self.memory.last_logger_list)
         print(f"Type data dari self.memory.last_logger_list adalah {type(self.memory.last_logger_list)}")
         print(f"Panjang data dari self.memory.last_logger_list adalah {len(self.memory.last_logger_list)}")
-        print("self.memory.last_logger ",self.memory.last_logger)
+        print("self.memory.last_logger ", self.memory.last_logger)
 
-        target_loggers = self.memory.last_logger_list or [self.memory.last_logger] # Error no
+        target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
         logger_list = fetch_list_logger()
 
         if not target_loggers or not logger_list:
             return "Target logger atau daftar logger tidak tersedia."
 
-        fetched = find_and_fetch_latest_data(target_loggers, logger_list)
-        print("fetched data adalah :",fetched)
+        fetched_result = find_and_fetch_latest_data(target_loggers, logger_list, original_prompt=prompt)
+
+        # Tangani fallback ke general_stesy
+        if fetched_result.get("fallback"):
+            return fetched_result["response"]
+
+        fetched = fetched_result.get("results", [])
+        print("fetched data adalah :", fetched)
 
         summaries = []
         for item in fetched:
@@ -442,6 +448,7 @@ class IntentManager:
             summaries.append(summary)
 
         return "\n\n---\n\n".join(summaries)
+
 
         # if not fetched:
         #     return "Tidak ditemukan data untuk logger yang disebutkan."

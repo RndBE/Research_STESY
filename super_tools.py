@@ -32,7 +32,7 @@ def general_stesy(messages, model_name="llama3.1:8b"):
     system_prompt = {
         "role": "system",
         "content": (
-            "Anda adalah asisten telemetri STESY yang hanya menjawab pertanyaan dalam konteks berikut:\n"
+            "Anda adalah AI virtual assistant Smart Telemetry Systems (STESY) yang hanya menjawab pertanyaan dalam konteks khusus berikut:.\n"
             "- Telemetri\n"
             "- Hidrologi\n"
             "- Sungai\n"
@@ -41,8 +41,7 @@ def general_stesy(messages, model_name="llama3.1:8b"):
             "- Analisis data logger\n\n"
             "Jika pertanyaan user sesuai konteks di atas, berikan jawaban secara informatif, jelas, dan dalam format markdown jika relevan.\n\n"
             "Namun jika pertanyaan user berada di luar topik (misalnya tentang sejarah, teknologi umum, hiburan, atau tidak ada hubungannya dengan sistem telemetri), "
-            "**tolak dengan sopan dan balas seperti ini**:\n"
-            "\"❌ Maaf, saya hanya dapat membantu pertanyaan yang berkaitan dengan telemetri, hidrologi, cuaca, sungai, atau analisis data logger. Silakan ajukan pertanyaan lain yang sesuai dengan sistem STESY. 😊\""
+            "**tolak dengan sopan boleh tambahkan emoticon**:\n"
         )
     }
 
@@ -561,7 +560,7 @@ def preprocess_name_list(name_list):
 def normalize_text(text):
     return text.lower().replace("pos", "").replace("logger", "").replace("dan", "").replace("hingga", "").strip()
 
-def find_and_fetch_latest_data(name_list, logger_list, threshold=40, max_candidates=3):
+def find_and_fetch_latest_data(name_list, logger_list, threshold=80, max_candidates=3, original_prompt=None):
     results = []
     
      # Tambahkan pre-processing
@@ -614,7 +613,20 @@ def find_and_fetch_latest_data(name_list, logger_list, threshold=40, max_candida
             except Exception as e:
                 print(f"[ERROR] Gagal fetch data untuk {matched_logger['nama_lokasi']}: {e}")
 
-    return results
+    # Jika tidak ada hasil, arahkan ke general_stesy
+    if not results and original_prompt:
+        print("[INFO] Tidak ditemukan logger yang cocok, mengarahkan ke general_stesy()...")
+        fallback_messages = [{"role": "user", "content": original_prompt}]
+        ai_response = general_stesy(fallback_messages)
+        return {
+            "fallback": True,
+            "response": ai_response
+        }
+
+    return {
+        "fallback": False,
+        "results": results
+    }
 
 def find_closest_logger(name_fragment, logger_list, threshold=40, max_candidates=3):
     name_fragment = name_fragment.strip()
