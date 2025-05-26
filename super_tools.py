@@ -709,7 +709,6 @@ def fetch_list_logger_from_prompt_flexibleV1(user_prompt: str):
                 f"\n### {i}. {log['nama_lokasi']}\n"
                 f"* **Alamat**: {log['alamat']}\n"
                 f"* **Kabupaten**: {log['kabupaten']}\n"
-                f"* **Latitude, Longitude**: {log['latitude']}, {log['longitude']}\n"
                 f"* **Status Koneksi**: {log['koneksi']}\n"
             )
 
