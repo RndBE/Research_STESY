@@ -649,12 +649,11 @@ def find_closest_logger(name_fragment, logger_list, threshold=40, max_candidates
 
 
 def fetch_list_logger_from_prompt_flexibleV1(user_prompt: str):
-    print("show_list_logger ini telah berjalan untuk mendapatkan lokasi pos di daerah yang disebutkan")
+    print("fetch_list_logger_from_prompt_flexibleV1 telah berjalan")
 
     # Daftar kabupaten yang didukung
     kabupaten_list = ['Sleman', 'Bantul', 'Kulon Progo', 'Gunung Kidul']
 
-    # Fungsi ekstraksi kabupaten dari prompt dengan case-insensitive
     def extract_kabupaten(prompt: str) -> str:
         prompt = prompt.lower()
         for kab in kabupaten_list:
@@ -662,7 +661,6 @@ def fetch_list_logger_from_prompt_flexibleV1(user_prompt: str):
                 return kab
         return None
 
-    # Ekstrak kabupaten dari prompt
     kabupaten = extract_kabupaten(user_prompt)
 
     # Fetch data dari API
@@ -673,9 +671,9 @@ def fetch_list_logger_from_prompt_flexibleV1(user_prompt: str):
         loggers = response.json()
     except requests.RequestException as e:
         print(f"Error fetching logger data: {e}")
-        return []
+        return "⚠️ Gagal mengambil data logger dari server."
 
-    # Jika ingin pastikan hanya field yang diperlukan
+    # Filter field penting
     filtered_loggers = []
     for row in loggers:
         filtered_loggers.append({
@@ -685,21 +683,62 @@ def fetch_list_logger_from_prompt_flexibleV1(user_prompt: str):
             "longitude": row.get("longitude"),
             "alamat": row.get("alamat"),
             "kabupaten": row.get("kabupaten"),
-            "koneksi": row.get("koneksi")  # kalau ingin menampilkan koneksi juga
+            "koneksi": row.get("koneksi")
         })
 
-    # Buat DataFrame
     df = pd.DataFrame(filtered_loggers)
 
-    # Filter jika kabupaten disebutkan
     if kabupaten:
         df = df[df['kabupaten'].str.lower() == kabupaten.lower()]
         print(f"Filter berdasarkan kabupaten: {kabupaten}")
     else:
         print("Tidak ada kabupaten disebutkan, tampilkan semua logger.")
 
-    # Kembalikan sebagai list of dict
-    return df.to_dict(orient='records')
+    result_list = df.to_dict(orient='records')
+
+    # === Ringkasan otomatis ===
+    def summarize_list_logger_internal():
+        print("summarize_list_logger_internal telah berjalan")
+
+        if not result_list:
+            return "⚠️ Tidak ditemukan logger untuk permintaan Anda."
+
+        markdown_list = ""
+        for i, log in enumerate(result_list, start=1):
+            markdown_list += (
+                f"\n### {i}. {log['nama_lokasi']}\n"
+                f"* **Alamat**: {log['alamat']}\n"
+                f"* **Kabupaten**: {log['kabupaten']}\n"
+                f"* **Latitude, Longitude**: {log['latitude']}, {log['longitude']}\n"
+                f"* **Status Koneksi**: {log['koneksi']}\n"
+            )
+
+        user_msg = (
+            f"Tampilkan daftar logger berdasarkan prompt berikut:\n\n"
+            f"`{user_prompt}`\n\n"
+            f"Jumlah logger ditemukan: {len(result_list)} pos.\n\n"
+            f"{markdown_list}\n\n"
+            "Buat ringkasan pendek di awal (maksimal 2 kalimat), lalu tampilkan semua logger. "
+            "Awali dengan judul: **Daftar Pos Telemetri Berdasarkan Permintaan**\n"
+            "Tambahkan garis pemisah '=====' di bawah judul."
+        )
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Anda adalah asisten telemetri yang menyusun ringkasan dan daftar pos logger.\n"
+                    "Buat ringkasan pendek yang relevan, lalu tampilkan semua logger dalam format markdown."
+                )
+            },
+            {"role": "user", "content": user_msg}
+        ]
+
+        response = chat(model="llama3.1:8b", messages=messages, options={"num_predict": 1024})
+        return response["message"]["content"]
+
+    return summarize_list_logger_internal()
+
 
 def fetch_data_range(id_logger, start_date, end_date, interval="hari"):
     url = f"https://dpupesdm.monitoring4system.com/api/data_range?id_logger={id_logger}&interval={interval}&awal={start_date}&akhir={end_date}"
