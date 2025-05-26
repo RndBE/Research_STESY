@@ -587,7 +587,7 @@ def preprocess_name_list(name_list):
 def normalize_text(text):
     return text.lower().replace("pos", "").replace("logger", "").replace("dan", "").replace("hingga", "").strip()
 
-def find_and_fetch_latest_data(name_list, matched_parameters, logger_list, threshold=80, max_candidates=3):
+def find_and_fetch_latest_data(name_list, matched_parameters, logger_list, threshold=70, max_candidates=3):
     results = []
 
     # Preprocessing nama lokasi
