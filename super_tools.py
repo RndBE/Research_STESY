@@ -110,6 +110,7 @@ def original_fetch_status_logger(prompt: str):
 
 
 def original_fetch_data_range(prompt: str, target_loggers: list, logger_list: list):
+    print("prompt :", prompt)
     date_info = extract_date_structured(prompt)
     interval = date_info.get("interval")
     start_date = date_info.get("awal_tanggal")
@@ -370,7 +371,7 @@ def extract_date_structured(text):  # v23.05.25_fx
     if "hari ini" in text:
         return output(today, today)
 
-    if re.search(r"\\bkema(?:rin|ren)\\b", text):
+    if re.search(r"\bkema(?:rin|ren)\b", text):
         day = today - timedelta(days=1)
         return output(day, day, interval="hari")
 
