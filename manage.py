@@ -385,7 +385,8 @@ class IntentManager:
             "get_logger_photo_path": self.get_photo_path,
             "how_it_works": self.explain_system,
             "analyze_logger_by_date": self.analyze_by_date,
-            "ai_limitation": self.ai_limitation
+            "ai_limitation": self.ai_limitation,
+            "show_online_logger" : self.connection_status
         }
 
     # def handle_intent(self):
@@ -420,25 +421,36 @@ class IntentManager:
         print("show_logger_data ini telah berjalan")
         prompt = self.memory.latest_prompt
 
-        print("self.memory.last_logger_list ", self.memory.last_logger_list)
+        print("self.memory.last_logger_list ",self.memory.last_logger_list)
         print(f"Type data dari self.memory.last_logger_list adalah {type(self.memory.last_logger_list)}")
         print(f"Panjang data dari self.memory.last_logger_list adalah {len(self.memory.last_logger_list)}")
-        print("self.memory.last_logger ", self.memory.last_logger)
+        print("self.memory.last_logger ",self.memory.last_logger)
 
-        target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
+        target_loggers = self.memory.last_logger_list or [self.memory.last_logger] # Error no
         logger_list = fetch_list_logger()
 
         if not target_loggers or not logger_list:
             return "Target logger atau daftar logger tidak tersedia."
 
-        fetched_result = find_and_fetch_latest_data(target_loggers, logger_list, original_prompt=prompt)
+        fetched = find_and_fetch_latest_data(target_loggers, logger_list)
+        print("fetched data adalah :",fetched)
+        system_prompt = (
+            "Kamu adalah asisten cerdas yang menjawab pertanyaan berdasarkan data logger cuaca. "
+            "Berikan jawaban yang singkat, jelas, dan sesuai dengan permintaan pengguna."
+        )
 
-        # Tangani fallback ke general_stesy
-        if fetched_result.get("fallback"):
-            return fetched_result["response"]
+        if fetched.get("not_found"):
+            # Jika tidak ditemukan, minta LLaMA buat jawaban manusiawi untuk kasus ini
+            response = chat(
+                model='llama3.1:8b',
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"{prompt}\n\nMaaf, pos yang Anda cari tidak ditemukan dalam data logger kami."}
+                ]
+            )
+            return response['message']['content']
 
-        fetched = fetched_result.get("results", [])
-        print("fetched data adalah :", fetched)
+        fetched = fetched["results"]
 
         summaries = []
         for item in fetched:
@@ -448,7 +460,6 @@ class IntentManager:
             summaries.append(summary)
 
         return "\n\n---\n\n".join(summaries)
-
 
         # if not fetched:
         #     return "Tidak ditemukan data untuk logger yang disebutkan."
@@ -685,6 +696,44 @@ class IntentManager:
         result = general_stesy(messages=[summary_prompt])
         self.memory.analysis_result = result
         return result
+
+    def connection_status(self):
+        print("self.memory.latest_prompt",self.memory.latest_prompt)
+        prompt = self.memory.latest_prompt
+        print("show_online_logger telah berjalan")
+        list_connection = fetch_list_logger()
+        
+        koneksi_aliases = sensor_aliases.get("Koneksi", [])
+        prompt_lower = prompt.lower()
+
+        # Deteksi apakah prompt mengandung kata terkait koneksi
+        if any(alias in prompt_lower for alias in koneksi_aliases):
+            # Kelompokkan kata kunci untuk status
+            keywords_aktif = ["terhubung", "aktif", "online", "connect", "tersambung", "hidup"]
+            keywords_nonaktif = ["terputus", "tidak terhubung", "offline", "disconnect", "mati"]
+
+            # Cek maksud pengguna
+            if any(k in prompt_lower for k in keywords_nonaktif):
+                target_status = "Terputus"
+            elif any(k in prompt_lower for k in keywords_aktif):
+                target_status = "Terhubung"
+            else:
+                return (
+                    "Prompt Anda menyebutkan status koneksi, namun tidak jelas apakah ingin menampilkan logger yang terhubung atau terputus.\n"
+                    "Contoh:\n- 'Berikan pos yang tidak aktif'\n- 'Tampilkan logger yang online'"
+                )
+
+            # Filter logger berdasarkan status koneksi
+            filtered = [l for l in list_connection if l["koneksi"].lower() == target_status.lower()]
+            if not filtered:
+                return f"Tidak ditemukan logger dengan status koneksi: *{target_status}*"
+
+            hasil = f"### Daftar Pos dengan koneksi *{target_status}*:\n"
+            for logger in filtered:
+                hasil += f"- *{logger['nama_lokasi']}* di {logger['alamat']} ({logger['kabupaten']})\n"
+            return hasil
+        else:
+            return "Prompt tidak mengandung kata kunci koneksi seperti aktif, offline, signal, dll."
 
     def ai_limitation(self):
         prompt = self.memory.latest_prompt

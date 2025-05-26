@@ -560,7 +560,7 @@ def preprocess_name_list(name_list):
 def normalize_text(text):
     return text.lower().replace("pos", "").replace("logger", "").replace("dan", "").replace("hingga", "").strip()
 
-def find_and_fetch_latest_data(name_list, logger_list, threshold=80, max_candidates=3, original_prompt=None):
+def find_and_fetch_latest_data(name_list, logger_list, threshold=80, max_candidates=3):
     results = []
     
      # Tambahkan pre-processing
@@ -613,20 +613,11 @@ def find_and_fetch_latest_data(name_list, logger_list, threshold=80, max_candida
             except Exception as e:
                 print(f"[ERROR] Gagal fetch data untuk {matched_logger['nama_lokasi']}: {e}")
 
-    # Jika tidak ada hasil, arahkan ke general_stesy
-    if not results and original_prompt:
-        print("[INFO] Tidak ditemukan logger yang cocok, mengarahkan ke general_stesy()...")
-        fallback_messages = [{"role": "user", "content": original_prompt}]
-        ai_response = general_stesy(fallback_messages)
-        return {
-            "fallback": True,
-            "response": ai_response
-        }
+    if not results:
+        # Kembalikan dict khusus jika tidak ada hasil
+        return {"not_found": True}
 
-    return {
-        "fallback": False,
-        "results": results
-    }
+    return {"not_found": False, "results": results}
 
 def find_closest_logger(name_fragment, logger_list, threshold=40, max_candidates=3):
     name_fragment = name_fragment.strip()
@@ -701,14 +692,17 @@ def fetch_list_logger_from_prompt_flexibleV1(user_prompt: str):
             "koneksi": row.get("koneksi")  # kalau ingin menampilkan koneksi juga
         })
 
-    # Buat DataFrame dari list
+    # Buat DataFrame
     df = pd.DataFrame(filtered_loggers)
 
-    # Filter DataFrame berdasarkan kabupaten, jika ditemukan
+    # Filter jika kabupaten disebutkan
     if kabupaten:
         df = df[df['kabupaten'].str.lower() == kabupaten.lower()]
+        print(f"Filter berdasarkan kabupaten: {kabupaten}")
+    else:
+        print("Tidak ada kabupaten disebutkan, tampilkan semua logger.")
 
-    # Kembalikan sebagai list dict
+    # Kembalikan sebagai list of dict
     return df.to_dict(orient='records')
 
 def fetch_data_range(id_logger, start_date, end_date, interval="hari"):
