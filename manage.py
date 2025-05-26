@@ -543,8 +543,8 @@ class IntentManager:
         return original_fetch_data_range(
             prompt=prompt,
             target_loggers=target_loggers,
-            logger_list=logger_list,
-            matched_parameters=matched_parameters  # <-- tambahkan ini ke original_fetch_data_range
+            matched_parameters=matched_parameters,  # <-- tambahkan ini ke original_fetch_data_range
+            logger_list=logger_list
         )
 
     def fetch_status_logger(self):
@@ -561,10 +561,19 @@ class IntentManager:
         prompt = self.memory.latest_prompt
         target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
         logger_list = fetch_list_logger()
+         # === Deteksi parameter dari prompt (sensor yang ingin ditampilkan)
+        matched_parameters = []
+        for param, aliases in sensor_aliases.items():
+            for alias in aliases:
+                if alias in prompt:
+                    matched_parameters.append(param)
+                    break
+        print("matched_parameters:", matched_parameters)
 
         return original_compare_by_date(
             prompt=prompt,
             target_loggers=target_loggers,
+            matched_parameters = matched_parameters,
             logger_list=logger_list
         )
 
