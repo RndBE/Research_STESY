@@ -679,7 +679,6 @@ class IntentManager:
 
         # === Fetch data terbaru
         fetched = find_and_fetch_latest_data(target_loggers, matched_parameters, logger_list)
-        print("fetched data adalah :", fetched)
 
         summaries = []
         last_data_buffer = []
@@ -687,8 +686,45 @@ class IntentManager:
         for item in fetched:
             nama_lokasi = item['logger_name']
             data = item['data']
-            summary = summarize_logger_data(nama_lokasi, data)
-            summaries.append(summary)
+
+            # Cek apakah data mengandung parameter yang diminta
+            data_keys = set()
+            if isinstance(data, dict):
+                data_keys = set(data.keys())
+            elif isinstance(data, list) and len(data) > 0:
+                data_keys = set(data[0].keys())
+            
+            # Apakah semua matched_parameters ada di data_keys? Kalau tidak, buat pesan khusus
+            missing_params = [p for p in matched_parameters if p not in data_keys]
+
+            if missing_params:
+                model_name = "llama3.1:8b"
+                missing_param_str = ', '.join(missing_params)
+                user_prompt = (
+                    f"Tolong jawab permintaan data logger dari pengguna sesuai konteks prompt{prompt}.\n\n"
+                    f"Namun, parameter berikut tidak ditemukan dalam data logger dari lokasi **{nama_lokasi}**:\n"
+                    f"- {missing_param_str}\n\n"
+                    "Mohon sampaikan bahwa data tersebut tidak tersedia saat ini, dan tidak perlu menampilkan data lain jika tidak relevan.\n"
+                    "Gunakan format markdown dan awali dengan nama lokasi sebagai judul."
+                )
+
+                messages = [
+                    {
+                        "role": "system",
+                        "content": (
+                            "Anda adalah asisten telemetri pintar. Tugas Anda adalah memberi tahu pengguna secara sopan jika parameter "
+                            "yang mereka minta tidak tersedia, tanpa membuat ringkasan yang tidak relevan."
+                        )
+                    },
+                    {"role": "user", "content": user_prompt}
+                ]
+
+                response = chat(model=model_name, messages=messages)
+                summaries.append(response["message"]["content"])
+            else:
+                # Ada data parameter, buat ringkasan normal
+                summary = summarize_logger_data(nama_lokasi, data)
+                summaries.append(summary)
 
             # ✅ Simpan hanya 1 logger (yang pertama) ke memory
             if item.get("logger_id"): # not self.memory.last_logger_id and 
