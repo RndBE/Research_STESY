@@ -668,8 +668,8 @@ class IntentManager:
                 "ketika mereka menyebutkan istilah ekstrem seperti 'terpanas', 'terdingin', 'paling lembap', dsb.\n\n"
                 "Tugas Anda adalah menebak parameter yang paling relevan berdasarkan kata ekstrem tersebut, "
                 "lalu meminta konfirmasi dari pengguna. Misalnya:\n"
-                "- Jika pengguna berkata 'pos terpanas', Anda bisa bertanya 'Apakah maksud Anda suhu udara (Temperatur_Udara)?'\n"
-                "- Jika pengguna berkata 'paling lembap', Anda bisa bertanya 'Apakah maksud Anda kelembaban udara (Kelembaban_Udara)?'\n"
+                "- Jika pengguna berkata 'pos terpanas', Anda bisa bertanya 'Apakah maksud Anda suhu udara?'\n"
+                "- Jika pengguna berkata 'paling lembap', Anda bisa bertanya 'Apakah maksud Anda kelembaban udara?'\n"
                 "- Jika tidak bisa dipastikan, minta pengguna memilih salah satu dari daftar sensor yang tersedia."
             )
             response = chat(
