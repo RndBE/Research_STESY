@@ -918,6 +918,7 @@ class IntentManager:
         summaries = original_fetch_data_range(
             prompt=self.memory.latest_prompt,
             target_loggers=target_loggers,
+            matched_parameters=matched_parameters,
             logger_list=logger_list
         )
 
