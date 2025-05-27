@@ -676,8 +676,6 @@ def find_and_fetch_latest_data(name_list, matched_parameters, logger_list, thres
 
     return results
 
-
-
 # def find_and_fetch_latest_data(name_list, logger_list, threshold=80, max_candidates=3):
 #     results = []
     
@@ -923,4 +921,3 @@ neo_test_prompts = [
     "Jelaskan bagaimana cara kerja sistem STESY."  # how_it_works
 ]
 
-neo_test_prompts[-3]
