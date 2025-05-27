@@ -544,13 +544,21 @@ def summarize_logger_data(nama_lokasi, latest_data, model_name="llama3.1:8b"):
     print("parameternya adalah:\n", parameter_text)
 
     # === Prompt LLM untuk Kesimpulan Naratif ===
+    # "Berikan kesimpulan dalam satu paragraf dari data logger berikut. "
+    # "Analisis tren parameter yang tersedia (jika terlihat), sebutkan nilai tertinggi dan terendah, dan "
+    # "jelaskan apakah nilainya termasuk kategori rendah, sedang, atau tinggi berdasarkan konteks umum. "
+    # "Gunakan gaya bahasa informatif dan ringkas.\n\n"
+    # Analisis tren parameter yang tersedia (jika terlihat), sebutkan nilai tertinggi dan terendah, dan jelaskan apakah nilainya termasuk kategori rendah, sedang, atau tinggi berdasarkan konteks umum. 
+
+
     user_prompt = (
         f"Tampilkan data lengkap dari logger **{nama_lokasi}** dalam format markdown.\n\n"
         f"Data diambil pada waktu: {waktu}.\n"
         # f"Status koneksi logger: {koneksi}.\n\n"
         f"Berikut adalah semua parameter yang tersedia:\n\n"
         f"{parameter_text}\n\n"
-        "tambahkan kesimpulan atau penjelasan singkat.\n"
+        "Berikan kesimpulan dalam satu paragraf dari data logger berikut. \n"
+        "Analisis tren parameter yang tersedia (jika terlihat), sebutkan nilai tertinggi dan terendah, dan jelaskan apakah nilainya termasuk kategori rendah, sedang, atau tinggi berdasarkan konteks umum. \n"
         "Cukup tampilkan semua data dalam urutan seperti yang diberikan.\n"
         f"Awali dengan judul: **Data Monitoring Telemetri {nama_lokasi}**\n"
         "Tambahkan garis pemisah '=====' di bawah judul."
