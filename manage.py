@@ -140,7 +140,7 @@ class PromptProcessedMemory:
         print("🧩 expanded_matches:", expanded_matches)
 
         # Daftar kata yang bukan bagian dari nama logger
-        stop_words = {"kemarin", "hari", "ini", "lalu", "terakhir", "minggu", "bulan", "tahun", "tanggal"}
+        stop_words = {"kemarin", "selama","hari", "ini", "lalu", "terakhir", "minggu", "bulan", "tahun", "tanggal"}
 
         cleaned_matches = set()
         for match in expanded_matches:
@@ -1000,7 +1000,7 @@ class IntentManager:
         else:
             print("[INFO] Tidak ditemukan last_data, mencoba fetch ulang")
             fetched_data = self.fetch_data_range()
-
+            print("fetched_data adalah 1 : ",fetched_data)
             if isinstance(fetched_data, str):
                 print("[ERROR] Gagal fetch ulang, response:", fetched_data)
                 return fetched_data  # e.g. "Tanggal tidak dikenali..."
@@ -1009,11 +1009,23 @@ class IntentManager:
             self.memory._save_user_memory()  # ✅ Tambahan di sini
             print("[INFO] Data berhasil di-fetch dan disimpan ke memory")
 
+        # summary_prompt = {
+        #     "role": "user",
+        #     "content": f"Berikan analisis data logger berikut:\n\n{fetched_data}"
+        # }
+        print("fetched_data untuk summary_prompt: ",fetched_data)
+
         summary_prompt = {
             "role": "user",
-            "content": f"Berikan analisis data logger berikut:\n\n{fetched_data}"
+            "content": (
+                "Berikan kesimpulan dalam satu paragraf dari data logger berikut. "
+                "Analisis tren parameter yang tersedia (jika terlihat), sebutkan nilai tertinggi dan terendah, dan "
+                "jelaskan apakah nilainya termasuk kategori rendah, sedang, atau tinggi berdasarkan konteks umum. "
+                "Gunakan gaya bahasa informatif dan ringkas.\n\n"
+                f"{fetched_data}"
+            )
         }
-
+        print("Summary Adalah:", summary_prompt)
         result = general_stesy(messages=[summary_prompt])
         self.memory.analysis_result = result
         self.memory._save_user_memory()
