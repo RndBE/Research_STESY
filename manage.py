@@ -107,8 +107,8 @@ class PromptProcessedMemory:
             outputs = self.bert_model(**inputs)
         pred = torch.argmax(outputs.logits, dim=1)
         return self.label_encoder.inverse_transform(pred.cpu().numpy())[0]
-
     def _extract_context_memory(self, text: Optional[str] = None):
+
         def normalize_logger_name(name: str) -> str:
             """Normalisasi nama logger: lowercase, strip, dan pastikan prefix 'pos ' ada"""
             name = " ".join(name.strip().lower().split())
@@ -116,41 +116,51 @@ class PromptProcessedMemory:
                 name = "pos " + name
             return name
 
-        # === Gabungkan teks history atau pakai yang diberikan
+        # === Gabungkan teks prompt dan response
         combined_text = text.lower() if text else " ".join(self.prompt_history + self.response_history).lower()
-        print("combined_text adalah :", combined_text)
+        print("📥 combined_text:", combined_text)
 
-        # === Ambil daftar logger dari fetch_list_logger
+        # === Ambil daftar logger valid dari fetch_list_logger
         try:
             logger_data = fetch_list_logger()
             logger_names_from_db = [normalize_logger_name(lg["nama_lokasi"]) for lg in logger_data if "nama_lokasi" in lg]
             normalized_valid_loggers = set(logger_names_from_db)
+            print(f"✅ {len(normalized_valid_loggers)} logger valid dimuat.")
         except Exception as e:
-            print("[ERROR] Gagal mengambil daftar logger dari fetch_list_logger()", e)
+            print("❌ [ERROR] fetch_list_logger gagal:", e)
             normalized_valid_loggers = set()
 
-        # === Regex kasar deteksi logger
+        # === Regex deteksi kasar logger
         logger_pattern = r"\b(?:pos|afmr|awlr|awr|arr|adr|awqr|avwr|awgc)\s+(?:[a-z]{3,}(?:\s+[a-z]{3,}){0,3})"
         raw_matches = re.findall(logger_pattern, combined_text)
-        print("logger_match (raw):", raw_matches)
+        print("🔍 logger_match (raw):", raw_matches)
 
-        # === Pisahkan gabungan 'dan', lalu validasi terhadap database
+        # === Pisahkan gabungan seperti 'dan', lalu validasi
         expanded_matches = self._clean_logger_list(raw_matches)
-        print("expanded_matches:", expanded_matches)
+        print("🧩 expanded_matches:", expanded_matches)
+
+        # Daftar kata yang bukan bagian dari nama logger
+        stop_words = {"kemarin", "hari", "ini", "lalu", "terakhir", "minggu", "bulan", "tahun", "tanggal"}
 
         cleaned_matches = set()
         for match in expanded_matches:
-            norm = normalize_logger_name(match)
+            # Hapus kata tidak relevan dari match
+            filtered = " ".join(word for word in match.split() if word.lower() not in stop_words)
+            norm = normalize_logger_name(filtered)
             if norm in normalized_valid_loggers:
                 cleaned_matches.add(norm)
+            else:
+                print(f"⚠️ Tidak valid: {norm}")
 
         if cleaned_matches:
             self.last_logger_list = list(cleaned_matches)
             self.last_logger = self.last_logger_list[-1]
-            print("last_logger_list:", self.last_logger_list)
-            print("last_logger:", self.last_logger)
+            print("📌 last_logger_list:", self.last_logger_list)
+            print("📌 last_logger (terakhir):", self.last_logger)
+        else:
+            print("🚫 Tidak ada logger valid ditemukan.")
 
-        # === Ekstraksi tanggal eksplisit atau relatif
+        # === Ekstraksi tanggal
         date_keywords = [
             "hari ini", "kemarin", "kemaren", "minggu ini", "minggu lalu", "bulan lalu",
             "awal bulan", "akhir bulan", "tahun lalu", "minggu terakhir", "bulan terakhir", "hari terakhir"
@@ -158,6 +168,7 @@ class PromptProcessedMemory:
         for phrase in date_keywords:
             if phrase in combined_text:
                 self.last_date = phrase
+                print("🗓️ Deteksi tanggal (keyword):", phrase)
                 break
 
         relative_date_patterns = [
@@ -169,7 +180,72 @@ class PromptProcessedMemory:
             match = re.search(pattern, combined_text)
             if match:
                 self.last_date = match.group(0)
+                print("🗓️ Deteksi tanggal (relatif):", self.last_date)
                 break
+
+    # def _extract_context_memory(self, text: Optional[str] = None):
+    #     def normalize_logger_name(name: str) -> str:
+    #         """Normalisasi nama logger: lowercase, strip, dan pastikan prefix 'pos ' ada"""
+    #         name = " ".join(name.strip().lower().split())
+    #         if not name.startswith("pos "):
+    #             name = "pos " + name
+    #         return name
+
+    #     # === Gabungkan teks history atau pakai yang diberikan
+    #     combined_text = text.lower() if text else " ".join(self.prompt_history + self.response_history).lower()
+    #     print("combined_text adalah :", combined_text)
+
+    #     # === Ambil daftar logger dari fetch_list_logger
+    #     try:
+    #         logger_data = fetch_list_logger()
+    #         logger_names_from_db = [normalize_logger_name(lg["nama_lokasi"]) for lg in logger_data if "nama_lokasi" in lg]
+    #         normalized_valid_loggers = set(logger_names_from_db)
+    #     except Exception as e:
+    #         print("[ERROR] Gagal mengambil daftar logger dari fetch_list_logger()", e)
+    #         normalized_valid_loggers = set()
+
+    #     # === Regex kasar deteksi logger
+    #     logger_pattern = r"\b(?:pos|afmr|awlr|awr|arr|adr|awqr|avwr|awgc)\s+(?:[a-z]{3,}(?:\s+[a-z]{3,}){0,3})"
+    #     raw_matches = re.findall(logger_pattern, combined_text)
+    #     print("logger_match (raw):", raw_matches)
+
+    #     # === Pisahkan gabungan 'dan', lalu validasi terhadap database
+    #     expanded_matches = self._clean_logger_list(raw_matches)
+    #     print("expanded_matches:", expanded_matches)
+
+    #     cleaned_matches = set()
+    #     for match in expanded_matches:
+    #         norm = normalize_logger_name(match)
+    #         if norm in normalized_valid_loggers:
+    #             cleaned_matches.add(norm)
+
+    #     if cleaned_matches:
+    #         self.last_logger_list = list(cleaned_matches)
+    #         self.last_logger = self.last_logger_list[-1]
+    #         print("last_logger_list setelah extract:", self.last_logger_list)
+    #         print("last_logger_list:", self.last_logger_list)
+    #         print("last_logger:", self.last_logger)
+
+    #     # === Ekstraksi tanggal eksplisit atau relatif
+    #     date_keywords = [
+    #         "hari ini", "kemarin", "kemaren", "minggu ini", "minggu lalu", "bulan lalu",
+    #         "awal bulan", "akhir bulan", "tahun lalu", "minggu terakhir", "bulan terakhir", "hari terakhir"
+    #     ]
+    #     for phrase in date_keywords:
+    #         if phrase in combined_text:
+    #             self.last_date = phrase
+    #             break
+
+    #     relative_date_patterns = [
+    #         r"\d+\s+hari\s+(lalu|terakhir)",
+    #         r"\d+\s+minggu\s+(lalu|terakhir)",
+    #         r"\d+\s+bulan\s+(lalu|terakhir)"
+    #     ]
+    #     for pattern in relative_date_patterns:
+    #         match = re.search(pattern, combined_text)
+    #         if match:
+    #             self.last_date = match.group(0)
+    #             break
 
 
     # def _extract_context_memory(self, text: Optional[str] = None):
@@ -284,8 +360,12 @@ class PromptProcessedMemory:
             self._extract_context_memory(text=new_prompt)
 
         # ✅ Ambil target
-        if self.intent in ["show_logger_data", "fetch_logger_by_date", "analyze_logger_by_date", "show_selected_parameter", "compare_parameter_across_loggers", "compare_logger_data", "compare_logger_by_date"]:
+        if self.intent in ["fetch_logger_by_date", "show_logger_data", "analyze_logger_by_date", "show_selected_parameter", "compare_parameter_across_loggers", "compare_logger_data", "compare_logger_by_date"]:
+            print(f"self.intent == {self.intent}")
             raw_targets = self.last_logger_list if self.last_logger_list else ([self.last_logger] if self.last_logger else [])
+            
+            print("raw_targets :", raw_targets)
+
             target = self._clean_logger_list(raw_targets)
         else:
             target = self.last_logger
@@ -546,7 +626,7 @@ class IntentManager:
         print("Matched Parameters Length:", len(matched_parameters))
 
         # === FETCH DATA TERBARU ===
-        fetched = find_and_fetch_latest_data(target_loggers, matched_parameters,logger_list)
+        fetched = find_and_fetch_latest_data(target_loggers, matched_parameters, logger_list)
         print("fetched data adalah :", fetched)
 
         summaries = []
@@ -613,17 +693,17 @@ class IntentManager:
         print("date_info", date_info)
 
         # === Validasi: Tidak boleh lebih dari 2 minggu lalu
-        if date_info["awal_tanggal"]:
-            start_date = datetime.strptime(date_info["awal_tanggal"], "%Y-%m-%d")
-            today = datetime.today()
-            max_allowed_start = today - timedelta(days=14)
+        # if date_info["awal_tanggal"]:
+        #     start_date = datetime.strptime(date_info["awal_tanggal"], "%Y-%m-%d")
+        #     today = datetime.today()
+        #     max_allowed_start = today - timedelta(days=14)
 
-            if start_date < max_allowed_start:
-                return (
-                    "⚠️ Permintaan data terlalu lama. "
-                    "Sistem hanya mengizinkan pengambilan data maksimal 2 minggu ke belakang dari hari ini.\n"
-                    f"Silakan ubah rentang tanggal menjadi setelah {max_allowed_start.strftime('%Y-%m-%d')}."
-                )
+        #     if start_date < max_allowed_start:
+        #         return (
+        #             "⚠️ Permintaan data terlalu lama. "
+        #             "Sistem hanya mengizinkan pengambilan data maksimal 2 minggu ke belakang dari hari ini.\n"
+        #             f"Silakan ubah rentang tanggal menjadi setelah {max_allowed_start.strftime('%Y-%m-%d')}."
+        #         )
 
          # === Deteksi parameter dari prompt (sensor yang ingin ditampilkan)
         matched_parameters = []
@@ -676,8 +756,8 @@ class IntentManager:
         prompt = self.memory.latest_prompt
         target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
         logger_list = fetch_list_logger()
-
-        fetched = find_and_fetch_latest_data(target_loggers, logger_list)
+        matched_parameters = []
+        fetched = find_and_fetch_latest_data(target_loggers, matched_parameters, logger_list)
         # 🔥 Gunakan summary sebagai tampilan perbandingan data
         summaries = []
         for item in fetched:

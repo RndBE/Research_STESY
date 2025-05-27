@@ -114,6 +114,7 @@ neo_test_prompts = [
     "Bagaimana ringkasan data diatas",  # analyze_logger_by_date
     "Berikan kesimpulan dari data diatas",  # analyze_logger_by_date
     "berikan analisa dari pos tersebut",  # analyze_logger_by_date
+    "berikan daftar post yang tidak hujan", # fetch_status_rain
     "Bandingkan suhu udara antara AWR Kaliurang dan ARR Kemput tanggal 1 Mei.",  # compare_logger_by_date
     "Berikan perbandingan data saat ini antara ARR Gemawang dan ARR Kemput.",  # compare_logger_data
     "Berapa kelembaban udara di ARR Kemput tanggal 3 Mei 2025?",  # fetch_logger_by_date
