@@ -664,11 +664,16 @@ class IntentManager:
         # Cek apakah hanya ada nilai ekstrem tanpa sensor alias
         if is_extreme_only(prompt, sensor_aliases):
             system_prompt = (
-                "Kamu adalah asisten cerdas yang membantu pengguna memahami pertanyaan. "
-                "Pertanyaan yang diterima hanya menyebut nilai ekstrem tanpa menyebut parameter sensor. "
-                "Tolong minta pengguna untuk menjelaskan data apa yang ingin ditampilkan, misalnya suhu udara, curah hujan, kelembaban, dan sebagainya. "
-                "Ingat, sistem hanya dapat menampilkan data untuk hari ini, data terbaru, atau rentang 24 jam terakhir. "
-                "Data untuk waktu tertentu seperti 'kemarin', 'minggu lalu', atau rentang waktu spesifik tidak tersedia."
+                f"Pertanyaan Anda menyebut nilai ekstrem, namun tidak menyebutkan parameter sensor secara spesifik. "
+                f"Apakah yang Anda maksud adalah salah satu dari berikut?\n\n"
+                f"- Suhu udara (Temperatur Udara)\n"
+                f"- Kelembaban udara\n"
+                f"- Curah hujan\n"
+                f"- Tekanan udara\n"
+                f"- Kecepatan angin\n"
+                f"- Tinggi muka air\n\n"
+                f"Silakan perjelas parameter yang Anda maksud agar data bisa ditampilkan dengan akurat.\n\n"
+                f"Catatan: Sistem hanya dapat menampilkan data terbaru, hari ini, atau dalam 24 jam terakhir."
             )
             response = chat(
                 model='llama3.1:8b',
