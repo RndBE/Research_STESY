@@ -117,8 +117,7 @@ def original_fetch_status_logger(prompt: str):
     except requests.RequestException as e:
         return f"Terjadi kesalahan saat mengakses API: {str(e)}"
 
-
-def original_fetch_data_range(prompt: str, target_loggers: list, matched_parameters: list, logger_list: list ):
+def original_fetch_data_range(prompt: str, target_loggers: list, matched_parameters: list, logger_list: list):
     print("prompt :", prompt)
     date_info = extract_date_structured(prompt)
     interval = date_info.get("interval")
@@ -137,7 +136,7 @@ def original_fetch_data_range(prompt: str, target_loggers: list, matched_paramet
         for logger in logger_list
     }
     all_logger_names = list(normalized_choices.keys())
-    summaries = []
+    summaries = [] 
 
     for name_fragment in target_loggers:
         query = normalize(name_fragment)
@@ -169,7 +168,7 @@ def original_fetch_data_range(prompt: str, target_loggers: list, matched_paramet
                 data = resp.json()
 
                 if isinstance(data, list) and data:
-                    # === Filter parameter jika matched_parameters tersedia
+                    # === Filter parameter jika tersedia
                     if matched_parameters:
                         filtered_data = []
                         for entry in data:
@@ -180,17 +179,94 @@ def original_fetch_data_range(prompt: str, target_loggers: list, matched_paramet
                             filtered_data.append(filtered_entry)
                         data = filtered_data
 
+                    # ✅ Simpan ke summary
                     summary = summarize_logger_data(logger_name, data)
                     summaries.append(summary)
 
             except Exception as e:
                 print(f"[ERROR] Gagal fetch data untuk {logger_name}: {e}")
 
+    # 🔚 Return hasil
     if summaries:
         print("fetched data adalah :", summaries)
         return "\n\n---\n\n".join(summaries)
     else:
         return "Tidak ditemukan data yang cocok untuk logger yang dimaksud."
+
+
+# def original_fetch_data_range(prompt: str, target_loggers: list, matched_parameters: list, logger_list: list ):
+#     print("prompt :", prompt)
+#     date_info = extract_date_structured(prompt)
+#     interval = date_info.get("interval")
+#     start_date = date_info.get("awal_tanggal")
+#     end_date = date_info.get("akhir_tanggal")
+#     print("date_info", date_info)
+
+#     if not interval or not start_date or not end_date:
+#         return "Tanggal tidak dikenali dalam prompt."
+
+#     def normalize(text):
+#         return text.lower().replace("pos", "").replace("logger", "").strip()
+
+#     normalized_choices = {
+#         normalize(logger['nama_lokasi']): logger
+#         for logger in logger_list
+#     }
+#     all_logger_names = list(normalized_choices.keys())
+#     summaries = []
+
+#     for name_fragment in target_loggers:
+#         query = normalize(name_fragment)
+#         fuzzy_results = process.extract(query, all_logger_names, scorer=fuzz.token_set_ratio, limit=3)
+
+#         print(f"\n[DEBUG] Fuzzy match for: '{name_fragment}'")
+#         for r in fuzzy_results:
+#             print(f"Match: {r[0]} | Score: {r[1]}")
+#         print("==============================")
+
+#         if not fuzzy_results or fuzzy_results[0][1] < 40:
+#             continue
+
+#         best_match = fuzzy_results[0][0]
+#         matched_logger = normalized_choices.get(best_match)
+
+#         if matched_logger:
+#             logger_id = matched_logger['id_logger']
+#             logger_name = matched_logger['nama_lokasi']
+#             try:
+#                 url = (
+#                     f"https://dpupesdm.monitoring4system.com/api/data_range"
+#                     f"?id_logger={logger_id}&interval={interval}"
+#                     f"&awal={start_date}&akhir={end_date}"
+#                 )
+#                 print(f"[FETCH RANGE] {logger_name} → {url}")
+#                 resp = requests.get(url, timeout=20)
+#                 resp.raise_for_status()
+#                 data = resp.json()
+
+#                 if isinstance(data, list) and data:
+#                     # === Filter parameter jika matched_parameters tersedia
+#                     if matched_parameters:
+#                         filtered_data = []
+#                         for entry in data:
+#                             filtered_entry = {
+#                                 k: v for k, v in entry.items()
+#                                 if k in matched_parameters or k.lower() in ["id_logger", "waktu"]
+#                             }
+#                             filtered_data.append(filtered_entry)
+#                         data = filtered_data
+
+#                     summary = summarize_logger_data(logger_name, data)
+#                     summaries.append(summary)
+
+#             except Exception as e:
+#                 print(f"[ERROR] Gagal fetch data untuk {logger_name}: {e}")
+
+#     if summaries:
+#         print("fetched data adalah :", summaries)
+#         return "\n\n---\n\n".join(summaries)
+#     else:
+#         return "Tidak ditemukan data yang cocok untuk logger yang dimaksud."
 
 
 
@@ -841,6 +917,7 @@ def fetch_list_logger_from_prompt_flexibleV1(user_prompt: str):
             f"`{user_prompt}`\n\n"
             f"Jumlah logger ditemukan: {len(result_list)} pos.\n\n"
             f"{markdown_list}\n\n"
+            "JANGAN Potong daftar logger. "
             "Buat ringkasan pendek di awal (maksimal 2 kalimat), lalu tampilkan semua logger. "
             "Awali dengan judul: **Daftar Pos Telemetri Berdasarkan Permintaan**\n"
             "Tambahkan garis pemisah '=====' di bawah judul."

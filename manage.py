@@ -8,8 +8,26 @@ from transformers import BertTokenizer, BertForSequenceClassification
 import torch
 import joblib
 from super_tools import sensor_aliases
+from difflib import get_close_matches
 
 MEMORY_DIR = "user_memory"
+
+# === Stopword Loader ===
+def get_stopwords_list(stop_file_path):
+    """Load stopwords dari file"""
+    try:
+        with open(stop_file_path, 'r', encoding="utf-8") as f:
+            stopwords = f.readlines()
+            stop_set = set(m.strip() for m in stopwords)
+            return list(frozenset(stop_set))
+    except FileNotFoundError:
+        print(f"[ERROR] File not found: {stop_file_path}")
+        return []
+
+# Load stopwords lokal
+STOPWORD_PATH = "id.beacon.stopwords.txt"
+# stopwords = get_stopwords_list(STOPWORD_PATH)
+
 
 class PromptProcessedMemory:
     def __init__(
@@ -32,6 +50,7 @@ class PromptProcessedMemory:
         self.intent: Optional[str] = None
         self.analysis_result: Optional[str] = None
         self.last_data: Optional[str] = None  # ✅ Untuk analisa tanpa perlu fetch ulang
+        self.last_logger_source: Optional[str] = None    
 
         self.prev_intent: Optional[str] = None
         self.prev_target: Optional[str] = None
@@ -66,6 +85,7 @@ class PromptProcessedMemory:
                     self.last_logger = data.get("last_logger")
                     self.last_logger_id = data.get("last_logger_id")
                     self.last_date = data.get("last_date")
+                    self.last_logger_list = data.get("last_logger_list", [])
         except Exception as e:
             print(f"[MEMORY LOAD ERROR] {e}")
 
@@ -74,7 +94,8 @@ class PromptProcessedMemory:
             data = {
                 "last_logger": self.last_logger,
                 "last_logger_id": self.last_logger_id,
-                "last_date": self.last_date
+                "last_date": self.last_date,
+                "last_logger_list": self.last_logger_list  # ✅ Tambahkan ini
             }
             with open(self._get_memory_path(), "w", encoding="utf-8") as f:
                 json.dump(data, f)
@@ -90,7 +111,7 @@ class PromptProcessedMemory:
         if self.prompt_history:
             self.latest_prompt = self.prompt_history[-1]
 
-    def get_context_window(self, window_size: int = 6) -> List[Dict[str, str]]:
+    def get_context_window(self, window_size: int = 4) -> List[Dict[str, str]]:
         prompts = self.prompt_history[-window_size:]
         responses = self.response_history[-window_size:]
         context = []
@@ -100,27 +121,44 @@ class PromptProcessedMemory:
         return context
 
     def _predict_intent_bert(self, text: str) -> str:
-        print("text dari _predict_intent_bert :", text)
+        # print("text dari _predict_intent_bert :", text)
         inputs = self.tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=512)
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
         with torch.no_grad():
             outputs = self.bert_model(**inputs)
         pred = torch.argmax(outputs.logits, dim=1)
         return self.label_encoder.inverse_transform(pred.cpu().numpy())[0]
-    def _extract_context_memory(self, text: Optional[str] = None):
+    
+    def confirm_logger_from_previous_suggestion(self, previous_assistant_message: str, user_reply: str) -> Optional[str]:
+        """
+        Jika user menjawab 'ya' dan assistant sebelumnya memberi saran logger,
+        maka ambil logger yang disarankan pertama.
+        """
+        user_reply = user_reply.strip().lower()
+        prev_msg = previous_assistant_message.strip().lower()
 
+        if user_reply in {"ya", "iya", "betul", "benar"} and "tidak dikenali" in prev_msg:
+            # Ambil logger dari kalimat seperti: "Apakah maksud Anda: 'pos arr kemput'?"
+            match = re.findall(r"'(pos [^']+)'", previous_assistant_message)
+            if match:
+                confirmed_logger = match[0]
+                print(f"🤖 Logger dikonfirmasi oleh user: {confirmed_logger}")
+                return confirmed_logger
+        
+        return None
+    
+    def _extract_context_memory(self, text: Optional[str] = None):
+        print("Function _extract_context_memory sedang berjalan")
         def normalize_logger_name(name: str) -> str:
-            """Normalisasi nama logger: lowercase, strip, dan pastikan prefix 'pos ' ada"""
             name = " ".join(name.strip().lower().split())
             if not name.startswith("pos "):
                 name = "pos " + name
             return name
 
-        # === Gabungkan teks prompt dan response
         combined_text = text.lower() if text else " ".join(self.prompt_history + self.response_history).lower()
         print("📥 combined_text:", combined_text)
+        print(f"Latest Prompt : {self.latest_prompt}")
 
-        # === Ambil daftar logger valid dari fetch_list_logger
         try:
             logger_data = fetch_list_logger()
             logger_names_from_db = [normalize_logger_name(lg["nama_lokasi"]) for lg in logger_data if "nama_lokasi" in lg]
@@ -130,27 +168,36 @@ class PromptProcessedMemory:
             print("❌ [ERROR] fetch_list_logger gagal:", e)
             normalized_valid_loggers = set()
 
-        # === Regex deteksi kasar logger
         logger_pattern = r"\b(?:pos|afmr|awlr|awr|arr|adr|awqr|avwr|awgc)\s+(?:[a-z]{3,}(?:\s+[a-z]{3,}){0,3})"
         raw_matches = re.findall(logger_pattern, combined_text)
         print("🔍 logger_match (raw):", raw_matches)
 
-        # === Pisahkan gabungan seperti 'dan', lalu validasi
         expanded_matches = self._clean_logger_list(raw_matches)
         print("🧩 expanded_matches:", expanded_matches)
 
-        # Daftar kata yang bukan bagian dari nama logger
-        stop_words = {"kemarin", "selama","hari", "ini", "lalu", "terakhir", "minggu", "bulan", "tahun", "tanggal"}
+        stopwords = {
+            "kemarin", "kemaren", "hari", "ini", "lalu", "terakhir",
+            "minggu", "bulan", "tahun", "tanggal", "besok", "selama", "depan"
+        }
 
         cleaned_matches = set()
+        self.logger_suggestions = {}
+
         for match in expanded_matches:
-            # Hapus kata tidak relevan dari match
-            filtered = " ".join(word for word in match.split() if word.lower() not in stop_words)
+            filtered = " ".join(word for word in match.split() if word.lower() not in stopwords)
             norm = normalize_logger_name(filtered)
+            print("filtered:", filtered, "→ norm:", norm)
+
             if norm in normalized_valid_loggers:
                 cleaned_matches.add(norm)
             else:
-                print(f"⚠️ Tidak valid: {norm}")
+                suggestions = get_close_matches(norm, normalized_valid_loggers, n=2, cutoff=0.6)
+                if suggestions:
+                    self.logger_suggestions[norm] = suggestions
+                    # cleaned_matches = suggestions
+                print(f"⚠️ Tidak valid: {norm} — Saran: {suggestions}")
+                
+        # print(f"cleaned_matches = {cleaned_matches}")
 
         if cleaned_matches:
             self.last_logger_list = list(cleaned_matches)
@@ -158,7 +205,12 @@ class PromptProcessedMemory:
             print("📌 last_logger_list:", self.last_logger_list)
             print("📌 last_logger (terakhir):", self.last_logger)
         else:
-            print("🚫 Tidak ada logger valid ditemukan.")
+            print(f"🚫 Tidak ada logger valid ditemukan — mempertahankan last_logger sebelumnya. Yaitu {self.last_logger_list}")
+            self.last_logger_list = self.last_logger_list or []
+            # ❗️Jangan ubah self.last_logger, biarkan tetap bernilai sebelumnya
+            # self.last_logger_list = []
+            # self.last_logger = None
+            # print("🚫 Tidak ada logger valid ditemukan.")
 
         # === Ekstraksi tanggal
         date_keywords = [
@@ -183,6 +235,7 @@ class PromptProcessedMemory:
                 print("🗓️ Deteksi tanggal (relatif):", self.last_date)
                 break
 
+
     # def _extract_context_memory(self, text: Optional[str] = None):
     #     def normalize_logger_name(name: str) -> str:
     #         """Normalisasi nama logger: lowercase, strip, dan pastikan prefix 'pos ' ada"""
@@ -191,95 +244,55 @@ class PromptProcessedMemory:
     #             name = "pos " + name
     #         return name
 
-    #     # === Gabungkan teks history atau pakai yang diberikan
+    #     # === Gabungkan teks prompt dan response
     #     combined_text = text.lower() if text else " ".join(self.prompt_history + self.response_history).lower()
-    #     print("combined_text adalah :", combined_text)
+    #     print("📥 combined_text:", combined_text)
 
-    #     # === Ambil daftar logger dari fetch_list_logger
+    #     # === Ambil daftar logger valid dari fetch_list_logger
     #     try:
     #         logger_data = fetch_list_logger()
     #         logger_names_from_db = [normalize_logger_name(lg["nama_lokasi"]) for lg in logger_data if "nama_lokasi" in lg]
     #         normalized_valid_loggers = set(logger_names_from_db)
+    #         print(f"✅ {len(normalized_valid_loggers)} logger valid dimuat.")
     #     except Exception as e:
-    #         print("[ERROR] Gagal mengambil daftar logger dari fetch_list_logger()", e)
+    #         print("❌ [ERROR] fetch_list_logger gagal:", e)
     #         normalized_valid_loggers = set()
 
-    #     # === Regex kasar deteksi logger
+    #     # === Regex deteksi kasar logger
     #     logger_pattern = r"\b(?:pos|afmr|awlr|awr|arr|adr|awqr|avwr|awgc)\s+(?:[a-z]{3,}(?:\s+[a-z]{3,}){0,3})"
     #     raw_matches = re.findall(logger_pattern, combined_text)
-    #     print("logger_match (raw):", raw_matches)
+    #     print("🔍 logger_match (raw):", raw_matches)
 
-    #     # === Pisahkan gabungan 'dan', lalu validasi terhadap database
+    #     # === Pisahkan gabungan seperti 'dan'
     #     expanded_matches = self._clean_logger_list(raw_matches)
-    #     print("expanded_matches:", expanded_matches)
+    #     print("🧩 expanded_matches:", expanded_matches)
+
+    #     # === Daftar kata waktu yang bukan bagian dari nama logger
+    #     stopwords = {
+    #         "kemarin", "kemaren", "hari", "ini", "lalu", "terakhir", 
+    #         "minggu", "bulan", "tahun", "tanggal", "besok", "selama", "depan"
+    #     }
 
     #     cleaned_matches = set()
     #     for match in expanded_matches:
-    #         norm = normalize_logger_name(match)
+    #         # Hapus kata-kata waktu dari hasil regex
+    #         filtered = " ".join(word for word in match.split() if word.lower() not in stopwords)
+    #         print("filtered", filtered)
+    #         print("All Loggers Name :", normalized_valid_loggers)
+    #         norm = normalize_logger_name(filtered)
+    #         print("norm", norm)
     #         if norm in normalized_valid_loggers:
     #             cleaned_matches.add(norm)
+    #         else:
+    #             print(f"⚠️ Tidak valid: {norm}")
 
     #     if cleaned_matches:
     #         self.last_logger_list = list(cleaned_matches)
     #         self.last_logger = self.last_logger_list[-1]
-    #         print("last_logger_list setelah extract:", self.last_logger_list)
-    #         print("last_logger_list:", self.last_logger_list)
-    #         print("last_logger:", self.last_logger)
-
-    #     # === Ekstraksi tanggal eksplisit atau relatif
-    #     date_keywords = [
-    #         "hari ini", "kemarin", "kemaren", "minggu ini", "minggu lalu", "bulan lalu",
-    #         "awal bulan", "akhir bulan", "tahun lalu", "minggu terakhir", "bulan terakhir", "hari terakhir"
-    #     ]
-    #     for phrase in date_keywords:
-    #         if phrase in combined_text:
-    #             self.last_date = phrase
-    #             break
-
-    #     relative_date_patterns = [
-    #         r"\d+\s+hari\s+(lalu|terakhir)",
-    #         r"\d+\s+minggu\s+(lalu|terakhir)",
-    #         r"\d+\s+bulan\s+(lalu|terakhir)"
-    #     ]
-    #     for pattern in relative_date_patterns:
-    #         match = re.search(pattern, combined_text)
-    #         if match:
-    #             self.last_date = match.group(0)
-    #             break
-
-
-    # def _extract_context_memory(self, text: Optional[str] = None):
-
-    #     def normalize_logger_name(name: str) -> str:
-    #         return " ".join(name.strip().lower().split())
-        
-    #     combined_text = text.lower() if text else " ".join(self.prompt_history + self.response_history).lower()
-    #     print("combined_text adalah :", combined_text)
-
-    #     # === Ambil daftar nama lokasi dari fetch_list_logger
-    #     try:
-    #         logger_data = fetch_list_logger()
-    #         logger_names_from_db = [normalize_logger_name(lg["nama_lokasi"]) for lg in logger_data if "nama_lokasi" in lg]
-    #         normalized_valid_loggers = set(logger_names_from_db)
-    #     except Exception as e:
-    #         print("[ERROR] Gagal mengambil daftar logger dari fetch_list_logger()", e)
-    #         normalized_valid_loggers = set()
-
-    #     # === Regex deteksi logger
-    #     logger_pattern = r"\b(?:pos|afmr|awlr|awr|arr|adr|awqr|avwr|awgc)\s+(?:[a-z]{3,}\s*){1,4}"
-    #     raw_matches = re.findall(logger_pattern, combined_text)
-    #     print("logger_match (raw)", raw_matches)
-
-    #     # === Bersihkan dan validasi
-    #     cleaned_matches = set()
-    #     for match in raw_matches:
-    #         norm = normalize_logger_name(match)
-    #         if norm in normalized_valid_loggers:
-    #             cleaned_matches.add(norm)
-
-    #     if cleaned_matches:
-    #         self.last_logger_list = list(cleaned_matches)
-    #         self.last_logger = self.last_logger_list[-1]
+    #         print("📌 last_logger_list:", self.last_logger_list)
+    #         print("📌 last_logger (terakhir):", self.last_logger)
+    #     else:
+    #         print("🚫 Tidak ada logger valid ditemukan.")
 
     #     # === Ekstraksi tanggal
     #     date_keywords = [
@@ -289,6 +302,7 @@ class PromptProcessedMemory:
     #     for phrase in date_keywords:
     #         if phrase in combined_text:
     #             self.last_date = phrase
+    #             print("🗓️ Deteksi tanggal (keyword):", phrase)
     #             break
 
     #     relative_date_patterns = [
@@ -300,7 +314,9 @@ class PromptProcessedMemory:
     #         match = re.search(pattern, combined_text)
     #         if match:
     #             self.last_date = match.group(0)
+    #             print("🗓️ Deteksi tanggal (relatif):", self.last_date)
     #             break
+
 
     def _should_use_memory(self, prompt: str) -> bool:
         prompt = prompt.lower()
@@ -329,64 +345,102 @@ class PromptProcessedMemory:
         self.last_date = date_text
         self._save_user_memory()
 
+    def update_last_logger_list(self, logger_list: List[str], source: str):
+        self.last_logger_list = logger_list
+        self.last_logger_source = source
+        print(f"[MEMORY] last_logger_list diupdate dari source '{source}': {logger_list}")
+
+
+    def update_last_logger_list_from_response(self, response_text: str):
+        """
+        Update last_logger_list berdasarkan teks hasil response yang mengandung
+        daftar logger dengan format "- Pos <NAMA LOGGER>"
+        """
+        import re
+        matches = re.findall(r"- (Pos [A-Z]{3} [\w\s]+)", response_text)
+        if matches:
+            self.last_logger_list = [m.lower() for m in matches]
+            print(f"[MEMORY] Updated last_logger_list dari response: {self.last_logger_list}")
+
     def process_new_prompt(self, new_prompt: str) -> Dict:
-        print(f"new_prompt : {new_prompt}")
+        print("process_new_prompt sedang berjalan")
+        # print(f"new_prompt : {new_prompt}")
 
         is_same_prompt = self.latest_prompt == new_prompt
         self.latest_prompt = new_prompt
         self.prompt_history.append(new_prompt)
 
-        # ✅ Reset date dulu setiap prompt baru
         self.last_date = None
 
-        # ✅ Prediksi intent baru
         try:
             self.intent = self._predict_intent_bert(new_prompt)
         except Exception as e:
             print(f"[INTENT PREDICTION ERROR] {e}")
             self.intent = "unknown_intent"
 
-        # if self._should_use_memory(new_prompt): # change from this 
-        #     self._extract_context_memory()
-        # else:
-        #     self._extract_context_memory(text=new_prompt)
+        print("new_prompt di function process_new_prompt", new_prompt)
+        print(f"Pos Logger terakhir {self.last_logger}")
 
-        # ✅ Deteksi apakah harus pakai context memory sebelumnya to this line of code
-        print("new_prompt di function process_new_prompt", new_prompt) 
         if self._should_use_memory(new_prompt) and not self._contains_explicit_logger_or_date(new_prompt):
-            context_window = self.get_context_window(window_size=6)
+            context_window = self.get_context_window(window_size=4)
             self._extract_context_memory(text=" ".join([m["content"] for m in context_window if m["role"] == "user"]))
         else:
             self._extract_context_memory(text=new_prompt)
 
-        # ✅ Ambil target
-        if self.intent in ["fetch_logger_by_date", "show_logger_data", "analyze_logger_by_date", "show_selected_parameter", "compare_parameter_across_loggers", "compare_logger_data", "compare_logger_by_date"]:
-            print(f"self.intent == {self.intent}")
+        if self.intent in [
+            "show_logger_data", "analyze_logger_by_date", "fetch_logger_by_date",
+            "show_selected_parameter", "compare_parameter_across_loggers", 
+            "compare_logger_data", "compare_logger_by_date"
+        ]:
+            print(f"self.intent == {self.intent} HEHE it works at least ")
             raw_targets = self.last_logger_list if self.last_logger_list else ([self.last_logger] if self.last_logger else [])
-            
             print("raw_targets :", raw_targets)
-
             target = self._clean_logger_list(raw_targets)
+        # if self.intent in ['fetch_logger_by_date']:
+        #     print("HEHE it works at least")
+        #     print(f"Pos Logger terakhir {self.last_logger}")
         else:
             target = self.last_logger
 
-        # if self.intent == "show_logger_data":
-        #     raw_targets = self.last_logger_list if self.last_logger_list else ([self.last_logger] if self.last_logger else [])
-        #     target = self._clean_logger_list(raw_targets)
-        # else:
-        #     target = self.last_logger
-        # ✅ Return dan cache
-        print("\n")
-        print("Dari function process_new_prompt untuk deteksi intent") 
+        # ✅ Tambahkan di sini
+        if (not target or target == []) and hasattr(self, "logger_suggestions"):
+            logger_fallbacks = list(self.logger_suggestions.values())[0]
+            print(f"[FALLBACK] Menggunakan saran logger: {logger_fallbacks}")
+            target = logger_fallbacks
+
+        # ✅ Return intent info + logger_suggestions
+        print("\nDari function process_new_prompt untuk deteksi intent")
         print("=================")
-        print(f"intent: {self.intent}, target: {target},date: {self.last_date}") # intent: compare_logger_by_date, target: None,date: kemarin
+        print(f"intent: {self.intent}, target: {target}, date: {self.last_date}")
         print("\n")
+
         return {
             "intent": self.intent,
             "target": target,
             "date": self.last_date,
-            "latest_prompt": new_prompt
+            "latest_prompt": new_prompt,
+            "logger_suggestions": self.logger_suggestions if not target else {}
         }
+    def reset_memory_if_chat_too_long(self, max_user_messages: int = 6):
+        user_msg_count = sum(1 for m in self.user_messages if m["role"] == "user")
+        print(f"[INFO] Jumlah chat user: {user_msg_count}")
+
+        if user_msg_count >= max_user_messages:
+            print(f"🧹 Mereset memori karena user telah mengirim {user_msg_count} chat.")
+            self.last_logger = None
+            self.last_logger_id = None
+            self.last_logger_list = []
+            self.last_data = None
+            self.last_date = None
+            self.intent = None
+            self.analysis_result = None
+            self._save_user_memory()
+            self._memory_was_reset = True
+        else:
+            self._memory_was_reset = False
+
+    def memory_was_reset(self) -> bool:
+        return getattr(self, "_memory_was_reset", False)
 
     def _contains_explicit_logger_or_date(self, text: str) -> bool:
         text = text.lower()
@@ -553,19 +607,19 @@ class IntentManager:
     def __init__(self, memory):
         self.memory = memory
         self.intent_map = {
-            "show_logger_data": self.fetch_latest_data,
-            "fetch_logger_by_date": self.fetch_data_range,
-            "fetch_status_rain": self.fetch_status_logger,
-            "show_list_logger": self.show_list_logger,
-            "compare_logger_by_date": self.compare_by_date,
-            "compare_logger_data": self.compare_latest_data,
-            "compare_parameter_across_loggers": self.compare_across_loggers,
-            "show_selected_parameter": self.show_selected_parameter,
-            "get_logger_photo_path": self.get_photo_path,
-            "how_it_works": self.explain_system,
-            "analyze_logger_by_date": self.analyze_by_date,
-            "ai_limitation": self.ai_limitation,
-            "show_online_logger" : self.connection_status
+            "show_logger_data": self.fetch_latest_data, # safe id_logger, date_info, fetched data(before llm)
+            "fetch_logger_by_date": self.fetch_data_range, # safe id_logger, date_info, fetched data(before llm)
+            "fetch_status_rain": self.fetch_status_logger, # safe id_logger, fetched data(before llm)
+            "show_list_logger": self.show_list_logger, # safe id_logger, date_info, fetched data(before llm)
+            "compare_logger_by_date": self.compare_by_date, # safe id_logger, date_info, fetched data(before llm)
+            "compare_logger_data": self.compare_latest_data, # safe id_logger, date_info, fetched data(before llm)
+            "compare_parameter_across_loggers": self.compare_across_loggers, # safe id_logger, date_info, fetched data(before llm)
+            "show_selected_parameter": self.show_selected_parameter, # safe id_logger, date_info, fetched data(before llm)
+            "get_logger_photo_path": self.get_photo_path, # safe id_logger, date_info, fetched data(before llm)
+            "how_it_works": self.explain_system, # safe id_logger, date_info, fetched data(before llm)
+            "analyze_logger_by_date": self.analyze_by_date, # safe id_logger, date_info, fetched data(before llm)
+            "ai_limitation": self.ai_limitation, # safe id_logger, date_info, fetched data(before llm)
+            "show_online_logger" : self.connection_status # safe id_logger, date_info, fetched data(before llm)
         }
 
     # def handle_intent(self):
@@ -592,51 +646,104 @@ class IntentManager:
         target = self.memory.last_logger_list or [self.memory.last_logger]
         date = self.memory.last_date
 
+        # ✅ Tambahkan ini untuk mencegah error
+        target = [t for t in target if t is not None]
+        if not target:
+            return "⚠️ Tidak ditemukan logger yang valid dari permintaan Anda."
+
         print(f"Dari Prompt {prompt} Intent adalah : {intent}, target logger adalah : {target}, tanggal yang dicari adalah : {date}")
         func = self.intent_map.get(intent, self.fallback_response)
         return func()
     
+
     def fetch_latest_data(self):
-        print("show_logger_data ini telah berjalan")
+        print("intent show_logger_data ini telah berjalan")
         prompt = self.memory.latest_prompt.lower()
-        data_last = self.memory.last_data
-
-        print(f"Data Terakhir adalah : {data_last}")
-        print("self.memory.last_logger_list ", self.memory.last_logger_list)
-        print(f"Type data dari self.memory.last_logger_list adalah {type(self.memory.last_logger_list)}")
-        print(f"Panjang data dari self.memory.last_logger_list adalah {len(self.memory.last_logger_list)}")
-        print("self.memory.last_logger ", self.memory.last_logger)
-
+        intent = self.memory.intent
         target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
         logger_list = fetch_list_logger()
 
+        print(f"Dari Prompt {prompt} Intent adalah : {intent}, target logger adalah : {target_loggers}")
         if not target_loggers or not logger_list:
             return "Target logger atau daftar logger tidak tersedia."
 
-        # === DETEKSI PARAMETER YANG DIMINTA DI DALAM PROMPT ===
+        # === Deteksi parameter yang diminta dari prompt
         matched_parameters = []
         for param, aliases in sensor_aliases.items():
             for alias in aliases:
                 if alias in prompt:
                     matched_parameters.append(param)
                     break
-
+        
         print("Matched Parameters:", matched_parameters)
-        print("Matched Parameters Type:", type(matched_parameters))
-        print("Matched Parameters Length:", len(matched_parameters))
 
-        # === FETCH DATA TERBARU ===
+        # === Fetch data terbaru
         fetched = find_and_fetch_latest_data(target_loggers, matched_parameters, logger_list)
         print("fetched data adalah :", fetched)
 
         summaries = []
+        last_data_buffer = []
+
         for item in fetched:
             nama_lokasi = item['logger_name']
             data = item['data']
             summary = summarize_logger_data(nama_lokasi, data)
             summaries.append(summary)
 
+            # ✅ Simpan hanya 1 logger (yang pertama) ke memory
+            if item.get("logger_id"): # not self.memory.last_logger_id and 
+                self.memory.last_logger_id = item["logger_id"]
+                self.memory.last_logger = nama_lokasi
+                self.memory.last_data = data  # Simpan hanya data mentah untuk analisa lanjutan
+                self.memory.analysis_result = None  # Reset analisis jika sebelumnya ada
+
+                print(f"✅ Disimpan ke memory: {self.memory.intent} / {self.memory.last_logger_id} / {self.memory.last_logger}")
+                
+        self.memory._save_user_memory()
+
         return "\n\n---\n\n".join(summaries)
+
+    # def fetch_latest_data(self):
+    #     print("show_logger_data ini telah berjalan")
+    #     prompt = self.memory.latest_prompt.lower()
+    #     data_last = self.memory.last_data
+
+    #     print(f"Data Terakhir adalah : {data_last}")
+    #     print("self.memory.last_logger_list ", self.memory.last_logger_list)
+    #     print(f"Type data dari self.memory.last_logger_list adalah {type(self.memory.last_logger_list)}")
+    #     print(f"Panjang data dari self.memory.last_logger_list adalah {len(self.memory.last_logger_list)}")
+    #     print("self.memory.last_logger ", self.memory.last_logger)
+
+    #     target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
+    #     logger_list = fetch_list_logger()
+
+    #     if not target_loggers or not logger_list:
+    #         return "Target logger atau daftar logger tidak tersedia."
+
+    #     # === DETEKSI PARAMETER YANG DIMINTA DI DALAM PROMPT ===
+    #     matched_parameters = []
+    #     for param, aliases in sensor_aliases.items():
+    #         for alias in aliases:
+    #             if alias in prompt:
+    #                 matched_parameters.append(param)
+    #                 break
+
+    #     print("Matched Parameters:", matched_parameters)
+    #     print("Matched Parameters Type:", type(matched_parameters))
+    #     print("Matched Parameters Length:", len(matched_parameters))
+
+    #     # === FETCH DATA TERBARU ===
+    #     fetched = find_and_fetch_latest_data(target_loggers, matched_parameters, logger_list)
+    #     print("fetched data adalah :", fetched)
+
+    #     summaries = []
+    #     for item in fetched:
+    #         nama_lokasi = item['logger_name']
+    #         data = item['data']
+    #         summary = summarize_logger_data(nama_lokasi, data)
+    #         summaries.append(summary)
+
+    #     return "\n\n---\n\n".join(summaries)
 
     # def fetch_latest_data(self):
     #     print("show_logger_data ini telah berjalan")
@@ -676,36 +783,27 @@ class IntentManager:
         #         print(f"{key}: {value}")
 
         # return f"Berhasil mengambil data terbaru dari {len(fetched)} logger."
-
-
     def fetch_data_range(self):
         print("fetch_logger_by_date ini telah berjalan")
+
         prompt = self.memory.latest_prompt
         print("prompt", prompt)
 
-        # === Ambil target logger
         target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
         print("target_loggers", target_loggers)
+
         logger_list = fetch_list_logger()
 
         # === Ekstraksi tanggal dari prompt
         date_info = extract_date_structured(prompt)
         print("date_info", date_info)
 
-        # === Validasi: Tidak boleh lebih dari 2 minggu lalu
-        # if date_info["awal_tanggal"]:
-        #     start_date = datetime.strptime(date_info["awal_tanggal"], "%Y-%m-%d")
-        #     today = datetime.today()
-        #     max_allowed_start = today - timedelta(days=14)
+        # Simpan tanggal ke memory
+        if date_info.get("awal_tanggal") or date_info.get("akhir_tanggal"):
+            self.memory.last_date = f"{date_info.get('awal_tanggal')} s/d {date_info.get('akhir_tanggal')}"
+            self.memory._save_user_memory()
 
-        #     if start_date < max_allowed_start:
-        #         return (
-        #             "⚠️ Permintaan data terlalu lama. "
-        #             "Sistem hanya mengizinkan pengambilan data maksimal 2 minggu ke belakang dari hari ini.\n"
-        #             f"Silakan ubah rentang tanggal menjadi setelah {max_allowed_start.strftime('%Y-%m-%d')}."
-        #         )
-
-         # === Deteksi parameter dari prompt (sensor yang ingin ditampilkan)
+        # === Deteksi parameter dari prompt
         matched_parameters = []
         for param, aliases in sensor_aliases.items():
             for alias in aliases:
@@ -714,13 +812,80 @@ class IntentManager:
                     break
         print("matched_parameters:", matched_parameters)
 
-        # === Teruskan jika valid
-        return original_fetch_data_range(
+        # === Ambil data dari original fetch
+        fetched_data = original_fetch_data_range(
             prompt=prompt,
             target_loggers=target_loggers,
-            matched_parameters=matched_parameters,  # <-- tambahkan ini ke original_fetch_data_range
+            matched_parameters=matched_parameters,
             logger_list=logger_list
         )
+
+        # === Simpan ke memory jika berhasil (list of summaries)
+        if isinstance(fetched_data, str) and "Tidak ditemukan" in fetched_data:
+            print("[INFO] Data tidak ditemukan, tidak menyimpan ke memory")
+            return fetched_data
+
+        if isinstance(fetched_data, list):
+            # Kalau original_fetch_data_range kamu return list (data mentah)
+            first_data = fetched_data[0] if fetched_data else None
+            if first_data and isinstance(first_data, dict):
+                self.memory.last_logger = first_data.get("logger_name")
+                self.memory.last_logger_id = first_data.get("logger_id")
+                self.memory.last_data = first_data.get("data")
+                self.memory.analysis_result = None  # reset analisa
+                self.memory._save_user_memory()
+                print(f"✅ Disimpan ke memory: fetch_logger_by_date / {self.memory.last_logger_id} / {self.memory.last_logger}")
+
+        elif isinstance(fetched_data, str):
+            # Jika kamu return string (ringkasan markdown), tetap bisa tampilkan
+            print("Ringkasan string (markdown):", fetched_data)
+
+        return fetched_data
+
+
+    # def fetch_data_range(self):
+    #     print("fetch_logger_by_date ini telah berjalan")
+    #     prompt = self.memory.latest_prompt
+    #     print("prompt", prompt)
+
+    #     # === Ambil target logger
+    #     target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
+    #     print("target_loggers", target_loggers)
+    #     logger_list = fetch_list_logger()
+
+    #     # === Ekstraksi tanggal dari prompt
+    #     date_info = extract_date_structured(prompt)
+    #     print("date_info", date_info)
+
+    #     # === Validasi: Tidak boleh lebih dari 2 minggu lalu
+    #     # if date_info["awal_tanggal"]:
+    #     #     start_date = datetime.strptime(date_info["awal_tanggal"], "%Y-%m-%d")
+    #     #     today = datetime.today()
+    #     #     max_allowed_start = today - timedelta(days=14)
+
+    #     #     if start_date < max_allowed_start:
+    #     #         return (
+    #     #             "⚠️ Permintaan data terlalu lama. "
+    #     #             "Sistem hanya mengizinkan pengambilan data maksimal 2 minggu ke belakang dari hari ini.\n"
+    #     #             f"Silakan ubah rentang tanggal menjadi setelah {max_allowed_start.strftime('%Y-%m-%d')}."
+    #     #         )
+
+    #      # === Deteksi parameter dari prompt (sensor yang ingin ditampilkan)
+    #     matched_parameters = []
+    #     for param, aliases in sensor_aliases.items():
+    #         for alias in aliases:
+    #             if alias in prompt:
+    #                 matched_parameters.append(param)
+    #                 break
+    #     print("matched_parameters:", matched_parameters)
+
+    #     # === Teruskan jika valid
+    #     return original_fetch_data_range(
+    #         prompt=prompt,
+    #         target_loggers=target_loggers,
+    #         matched_parameters=matched_parameters,  # <-- tambahkan ini ke original_fetch_data_range
+    #         logger_list=logger_list
+    #     )
 
     def fetch_status_logger(self):
         data_last = self.memory.last_data

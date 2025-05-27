@@ -19,35 +19,79 @@ def chat_endpoint():
     payload = request.get_json(force=True)
     model_name = payload.get("model", "llama3.1:8b")
     user_messages = payload.get("messages", [])
-    user_id = request.remote_addr
+    user_id = payload.get("uuid") # or request.remote_addr  # 🆕 Pakai UUID dari frontend
+    print("🔑 user_id:", user_id)
 
-    try: 
+    try:
         latest_user_msg = next((m["content"] for m in reversed(user_messages) if m["role"] == "user"), "")
-        # ✅ Inisialisasi memory dan intent manager
+        last_msg = user_messages[-1]["content"].strip().lower() if user_messages else ""
+        prev_assistant_msg = user_messages[-2]["content"].strip().lower() if len(user_messages) >= 2 and user_messages[-2]["role"] == "assistant" else ""
+
+        # 🧠 Inisialisasi memory & intent manager
         memory = PromptProcessedMemory(
             user_id=user_id,
             user_messages=user_messages,
             bert_model_path=BERT_MODEL_PATH,
             label_encoder_path=LABEL_ENCODER_PATH
         )
-        # print(memory)
+
+        # 🧹 Reset memori jika chat terlalu banyak
+        memory.reset_memory_if_chat_too_long()
+
         intent_manager = IntentManager(memory)
 
-        # print("intent_manager", intent_manager)
+        # ✅ Deteksi jika user mengkonfirmasi saran logger sebelumnya
+        confirmed_logger = memory.confirm_logger_from_previous_suggestion(prev_assistant_msg, last_msg)
+        if confirmed_logger:
+            intent_info = memory.process_new_prompt(confirmed_logger)
+            result = intent_manager.handle_intent()
+            return jsonify({
+                "model": model_name,
+                "created_at": datetime.now(timezone.utc).isoformat() + "Z",
+                "message": {"role": "assistant", "content": result}
+            })
 
-        # ✅ Proses dan jalankan intent
+        # ✅ Jalankan intent normal
         intent_info = memory.process_new_prompt(latest_user_msg)
-
         intent = intent_info["intent"]
         target = intent_info.get("target")
         date_text = intent_info.get("date")
-        print(f"Intent adalah : {intent}, target logger adalah : {target}, tanggal yang dicari adalah : {date_text}")
-        
-        print("1. latest_user_msg", latest_user_msg) 
-        print("2. intent_info", intent_info)
-        # intent_info
+        logger_suggestions = intent_info.get("logger_suggestions", {})
 
+        print(f"Intent adalah : {intent}, target logger adalah : {target}, tanggal yang dicari adalah : {date_text}")
+        print("1. latest_user_msg", latest_user_msg)
+        print("2. intent_info", intent_info)
+
+        # ❓ Tawarkan konfirmasi jika logger tidak dikenali
+        if (not target or target == []) and logger_suggestions:
+            suggestions_text = []
+            for invalid_logger, candidates in logger_suggestions.items():
+                if candidates:
+                    # suggestions_text.append(
+                    #     f"Nama logger '{invalid_logger}' tidak dikenali. Apakah maksud Anda: " +
+                    #     ", ".join(f"'{c}'" for c in candidates) + "?"
+                    # )
+                    suggestions_text.append(
+                        f"Maaf nama pos telemteri '{invalid_logger}' tidak dikenali. Apakah pos yang anda maksud adalah " +
+                        ", ".join(f"'{c}'" for c in candidates) + "?"
+                    )
+            return jsonify({
+                "model": model_name,
+                "created_at": datetime.now(timezone.utc).isoformat() + "Z",
+                "message": {"role": "assistant", "content": "\n".join(suggestions_text)}
+            })
+
+        # ✅ Jalankan handler intent
         result = intent_manager.handle_intent()
+
+        # 🔔 Tambahkan konfirmasi jika memori direset
+        if memory.memory_was_reset():
+            confirmation_msg = (
+                "💡 Sistem telah memulai sesi baru.\n"
+                "Riwayat 4 percakapan terakhir tetap disimpan, "
+                "namun tidak akan digunakan untuk analisis berikutnya.\n\n"
+            )
+            result = confirmation_msg + result
 
         return jsonify({
             "model": model_name,
@@ -62,6 +106,7 @@ def chat_endpoint():
             "created_at": datetime.now(timezone.utc).isoformat() + "Z",
             "message": {"role": "assistant", "content": "❌ Maaf, terjadi kesalahan saat memproses permintaan Anda."}
         }), 500
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
