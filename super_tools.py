@@ -561,8 +561,8 @@ def summarize_logger_data(nama_lokasi, latest_data, model_name="llama3.1:8b"):
             "role": "system",
             "content": (
                 "Anda adalah asisten telemetri pintar.\n"
-                "Tugas Anda adalah memberikan satu paragraf pendek ringkasan berdasarkan data logger yang tersedia.\n"
-                "Ringkasan harus objektif, ringkas, dan relevan — hindari penjelasan berlebihan."
+                "Tugas Anda adalah memberikan satu ringkasan berdasarkan data logger yang tersedia.\n"
+                "Ringkasan harus objektif, dan relevan — hindari penjelasan berlebihan."
             )
         },
         {"role": "user", "content": user_prompt}
