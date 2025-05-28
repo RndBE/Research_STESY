@@ -87,9 +87,7 @@ def chat_endpoint():
         # 🔔 Tambahkan konfirmasi jika memori direset
         if memory.memory_was_reset():
             confirmation_msg = (
-                "💡 Sistem telah memulai sesi baru.\n"
-                "Riwayat 4 percakapan terakhir tetap disimpan, "
-                "namun tidak akan digunakan untuk analisis berikutnya.\n\n"
+                ""
             )
             result = confirmation_msg + result
 

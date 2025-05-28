@@ -379,6 +379,7 @@ class PromptProcessedMemory:
             self.intent = "unknown_intent"
 
         print("new_prompt di function process_new_prompt", new_prompt)
+        print(f"Intent di function procces_new_prompt adalah : {self.intent}")
         print(f"Pos Logger terakhir {self.last_logger}")
 
         if self._should_use_memory(new_prompt) and not self._contains_explicit_logger_or_date(new_prompt):
@@ -402,16 +403,16 @@ class PromptProcessedMemory:
         else:
             target = self.last_logger
 
-        # ✅ Tambahkan di sini
-        if (not target or target == []) and hasattr(self, "logger_suggestions"):
-            logger_fallbacks = list(self.logger_suggestions.values())[0]
-            print(f"[FALLBACK] Menggunakan saran logger: {logger_fallbacks}")
-            target = logger_fallbacks
+        # # ✅ Tambahkan di sini
+        # if (not target or target == []) and hasattr(self, "logger_suggestions"):
+        #     logger_fallbacks = list(self.logger_suggestions.values())[0]
+        #     print(f"[FALLBACK] Menggunakan saran logger: {logger_fallbacks}")
+        #     target = logger_fallbacks
 
         # ✅ Return intent info + logger_suggestions
         print("\nDari function process_new_prompt untuk deteksi intent")
         print("=================")
-        print(f"intent: {self.intent}, target: {target}, date: {self.last_date}")
+        print(f" ✅ intent: {self.intent}, target: {target}, date: {self.last_date}")
         print("\n")
 
         return {
@@ -421,7 +422,7 @@ class PromptProcessedMemory:
             "latest_prompt": new_prompt,
             "logger_suggestions": self.logger_suggestions if not target else {}
         }
-    def reset_memory_if_chat_too_long(self, max_user_messages: int = 6):
+    def reset_memory_if_chat_too_long(self, max_user_messages: int = 4):
         user_msg_count = sum(1 for m in self.user_messages if m["role"] == "user")
         print(f"[INFO] Jumlah chat user: {user_msg_count}")
 
@@ -647,9 +648,9 @@ class IntentManager:
         date = self.memory.last_date
 
         # ✅ Tambahkan ini untuk mencegah error
-        target = [t for t in target if t is not None]
-        if not target:
-            return "⚠️ Tidak ditemukan logger yang valid dari permintaan Anda."
+        # target = [t for t in target if t is not None]
+        # if not target:
+        #     return "⚠️ Tidak ditemukan logger yang valid dari permintaan Anda."
 
         print(f"Dari Prompt {prompt} Intent adalah : {intent}, target logger adalah : {target}, tanggal yang dicari adalah : {date}")
         func = self.intent_map.get(intent, self.fallback_response)
@@ -827,6 +828,22 @@ class IntentManager:
 
         target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
         print("target_loggers", target_loggers)
+
+        # ✅ Filter None dari list
+        target_loggers = [t for t in target_loggers if t is not None]
+
+        # ❗Jika tidak ada target valid, berikan pesan penjelasan
+        if not target_loggers:
+            return (
+                "Maaf sistem tidak menemukan pos logger aktif dalam memori.\n\n"
+                "Hal ini bisa terjadi karena:\n"
+                "1. Anda belum menyebutkan nama pos secara eksplisit\n"
+                "2. Memori sistem telah direset karena sesi terlalu panjang\n\n"
+                "Silakan ketik ulang permintaan Anda dengan menyebutkan nama pos.\n"
+                "Contoh:\n"
+                "- `berikan data pos arr ngawen kemarin`\n"
+                "- `tampilkan data pos awlr bunder 2 hari terakhir`"
+            )
 
         logger_list = fetch_list_logger()
 
