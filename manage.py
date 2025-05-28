@@ -134,14 +134,16 @@ class PromptProcessedMemory:
         Jika user menjawab 'ya' dan assistant sebelumnya memberi saran logger,
         maka ambil logger yang disarankan pertama.
         """
+        print("confirm_logger_from_previous_suggestion telah berjalan")
         user_reply = user_reply.strip().lower()
         prev_msg = previous_assistant_message.strip().lower()
 
         if user_reply in {"ya", "iya", "betul", "benar"} and "tidak dikenali" in prev_msg:
             # Ambil logger dari kalimat seperti: "Apakah maksud Anda: 'pos arr kemput'?"
             match = re.findall(r"'(pos [^']+)'", previous_assistant_message)
+            print("match :", match)
             if match:
-                confirmed_logger = match[0]
+                confirmed_logger = match[1]
                 print(f"🤖 Logger dikonfirmasi oleh user: {confirmed_logger}")
                 return confirmed_logger
         
@@ -168,7 +170,7 @@ class PromptProcessedMemory:
             print("❌ [ERROR] fetch_list_logger gagal:", e)
             normalized_valid_loggers = set()
 
-        logger_pattern = r"\b(?:pos|afmr|awlr|awr|arr|adr|awqr|avwr|awgc)\s+(?:[a-z]{3,}(?:\s+[a-z]{3,}){0,3})"
+        logger_pattern = r"\b(?:logger|pos|afmr|awlr|awr|arr|adr|awqr|avwr|awgc)\s+(?:[a-z]{3,}(?:\s+[a-z]{3,}){0,3})"
         raw_matches = re.findall(logger_pattern, combined_text)
         print("🔍 logger_match (raw):", raw_matches)
 
@@ -191,7 +193,7 @@ class PromptProcessedMemory:
             if norm in normalized_valid_loggers:
                 cleaned_matches.add(norm)
             else:
-                suggestions = get_close_matches(norm, normalized_valid_loggers, n=2, cutoff=0.6)
+                suggestions = get_close_matches(norm, normalized_valid_loggers, n=1, cutoff=0.6)
                 if suggestions:
                     self.logger_suggestions[norm] = suggestions
                     # cleaned_matches = suggestions
@@ -397,7 +399,7 @@ class PromptProcessedMemory:
             raw_targets = self.last_logger_list if self.last_logger_list else ([self.last_logger] if self.last_logger else [])
             print("raw_targets :", raw_targets)
             target = self._clean_logger_list(raw_targets)
-        # if self.intent in ['fetch_logger_by_date']:
+        # if self.intent in ['compare_parameter_across_loggers']:
         #     print("HEHE it works at least")
         #     print(f"Pos Logger terakhir {self.last_logger}")
         else:
@@ -994,9 +996,12 @@ class IntentManager:
 
     def compare_across_loggers(self):
         print("compare_across_loggers ini telah berjalan")
-        prompt = self.memory.latest_prompt.lower()
-        logger_list = fetch_list_logger()
 
+        # print(f"intent adalah {self.intent}")
+        prompt = self.memory.latest_prompt.lower()
+        print(f"compare_across_loggers prompt {prompt}")
+        logger_list = fetch_list_logger()
+        print(f"Type data logger list adalah : {type(logger_list)}")
         if not logger_list:
             return "Daftar logger tidak tersedia."
 
@@ -1062,6 +1067,8 @@ class IntentManager:
         )
 
         context_data = "\n".join(comparison_data)
+
+        print("context_data :",context_data)
 
         response = chat(
             model='llama3.1:8b',

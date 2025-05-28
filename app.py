@@ -41,6 +41,7 @@ def chat_endpoint():
         intent_manager = IntentManager(memory)
 
         # ✅ Deteksi jika user mengkonfirmasi saran logger sebelumnya
+        print("prev_assistant_msg", prev_assistant_msg)
         confirmed_logger = memory.confirm_logger_from_previous_suggestion(prev_assistant_msg, last_msg)
         if confirmed_logger:
             intent_info = memory.process_new_prompt(confirmed_logger)
