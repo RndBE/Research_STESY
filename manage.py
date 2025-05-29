@@ -9,6 +9,8 @@ import torch
 import joblib
 from super_tools import sensor_aliases
 from difflib import get_close_matches
+from flask import Flask, request, jsonify
+from typing import List, Dict, Tuple
 
 MEMORY_DIR = "user_memory"
 
@@ -314,8 +316,6 @@ class PromptProcessedMemory:
                 print("🗓️ Deteksi tanggal (relatif):", self.last_date)
                 break
 
-
-
     # def _extract_context_memory(self, text: Optional[str] = None):
     #     def normalize_logger_name(name: str) -> str:
     #         """Normalisasi nama logger: lowercase, strip, dan pastikan prefix 'pos ' ada"""
@@ -397,7 +397,6 @@ class PromptProcessedMemory:
     #             print("🗓️ Deteksi tanggal (relatif):", self.last_date)
     #             break
 
-
     def _should_use_memory(self, prompt: str) -> bool:
         print("_should_use_memory telah berjalan HEHE")
         prompt = prompt.lower()
@@ -443,66 +442,110 @@ class PromptProcessedMemory:
             self.last_logger_list = [m.lower() for m in matches]
             print(f"[MEMORY] Updated last_logger_list dari response: {self.last_logger_list}")
 
+    def resolve_ambiguous_prompt_with_llm(self, user_messages: List[Dict], model_name: str = "llama3.1:8b") -> Tuple[str, bool]:
+        print("\n🧠 resolve_ambiguous_prompt_with_llm berjalan...")
+
+        reasoning_prompt = (
+            "Anda adalah asisten AI untuk sistem monitoring telemetri. "
+            "Tugas Anda adalah menjawab pertanyaan terakhir dari pengguna berdasarkan **informasi yang telah disebutkan secara eksplisit** dalam riwayat percakapan sebelumnya. "
+            "**Wajib periksa riwayat secara teliti dan jangan pernah mengarang, menyimpulkan, atau mengisi kekosongan dari asumsi.** "
+            "Jika jawaban dapat ditemukan secara jelas dari data sebelumnya, berikan jawaban langsung (maksimal satu kalimat). "
+            "Jika pertanyaan terakhir terlalu ambigu (misalnya 'ya', 'lanjutkan', 'jelaskan', 'pos tersebut', dsb), balas dengan: [AMBIGUOUS]. "
+            "Jika informasi untuk menjawab tidak tersedia secara eksplisit di chat sebelumnya, balas dengan: [NO ANSWER]. "
+            "Jawaban hanya boleh salah satu dari:\n"
+            "- jawaban langsung (jika tersedia di chat sebelumnya),\n"
+            "- [AMBIGUOUS], atau\n"
+            "- [NO ANSWER]."
+            "\n\nContoh:\n"
+            "User: tampilkan data pos kali bawang\n"
+            "Assistant: Pos tidak ditemukan. Apakah maksud Anda 'pos arr kali bawang'?\n"
+            "User: iya?\n"
+            "→ Maka Anda harus membalas: [AMBIGUOUS]\n\n"
+            "User: tampilkan suhu udara tertinggi\n"
+            "→ Jika suhu udara belum disebutkan di percakapan sebelumnya, maka Anda harus membalas: [NO ANSWER]"
+        )
+
+        messages_for_llm = [{"role": "system", "content": reasoning_prompt}] + user_messages
+
+        try:
+            response = chat(messages=messages_for_llm, model=model_name)
+            content = response['message']['content'] if isinstance(response, dict) else response.message.content
+            content = content.strip()
+            print("🧠 Jawaban awal dari LLM:", content)
+
+            if content == "[AMBIGUOUS]":
+                # Susun ulang pertanyaan eksplisit
+                clarification_prompt = (
+                    "Anda adalah asisten AI untuk sistem monitoring telemetri. "
+                    "Gunakan konteks dari percakapan sebelumnya untuk menyusun ulang maksud pengguna secara eksplisit. "
+                    "Tulis ulang dalam satu kalimat perintah eksplisit, seperti 'Tampilkan suhu udara pos yang terpanas'. "
+                    "Jawaban hanya boleh satu kalimat perintah yang jelas."
+                )
+                clarification_messages = [{"role": "system", "content": clarification_prompt}] + user_messages
+
+                clarification_response = chat(messages=clarification_messages, model=model_name)
+                clarified_text = clarification_response['message']['content'] if isinstance(clarification_response, dict) else clarification_response.message.content
+                return clarified_text.strip(), False
+
+            elif content == "[NO ANSWER]":
+                # Kembalikan prompt terakhir
+                return user_messages[-1]["content"], False
+
+            else:
+                # Jawaban langsung
+                return content, True
+
+        except Exception as e:
+            print("❌ Gagal memproses LLM:", e)
+            return user_messages[-1]["content"], False
+
     def process_new_prompt(self, new_prompt: str) -> Dict:
-        print("process_new_prompt sedang berjalan")
-        # print(f"new_prompt : {new_prompt}")
+        print("\nprocess_new_prompt sedang berjalan\n")
 
-        is_same_prompt = self.latest_prompt == new_prompt
-        self.latest_prompt = new_prompt
-        self.prompt_history.append(new_prompt)
+        payload = request.get_json(force=True)
+        model_name = payload.get("model", "llama3.1:8b")
+        user_messages = payload.get("messages", [])
 
+        print("USER MESSAGES :\n", user_messages)
+        print("\nLAST PROMPT", new_prompt)
+
+        # Gunakan LLM untuk menyusun prompt eksplisit berdasarkan chat history
+        combined_text, is_direct_answer = self.resolve_ambiguous_prompt_with_llm(user_messages, model_name=model_name)
+
+        if is_direct_answer:
+            print("\n✅ Ini adalah jawaban langsung dari LLM, tidak perlu intent.")
+            return self.handle_direct_answer(combined_text)  # Fungsi penanganan langsung
+
+        # Jika bukan jawaban langsung → proses seperti biasa
+        self.latest_prompt = combined_text
+        self.prompt_history.append(combined_text)
         self.last_date = None
 
         try:
-            predicted_intent = self._predict_intent_bert(new_prompt)
-            print("predicted_intent :", predicted_intent)
-            # Simpan intent sebelumnya hanya jika intent valid dan bukan "ai_limitation"
-            if predicted_intent != "ai_limitation" and self.intent is not None:
-                self.prev_intent = self.intent
-
-            self.intent = predicted_intent
-
-            print(f"self.intent {self.intent}")
-            print(f"self.prev_intent {self.prev_intent}")
-
+            self.intent = self._predict_intent_bert(combined_text)
         except Exception as e:
             print(f"[INTENT PREDICTION ERROR] {e}")
             self.intent = "unknown_intent"
 
-        print("new_prompt di function process_new_prompt", new_prompt)
-        print(f"Intent di function procces_new_prompt adalah : {self.intent}")
-        print(f"Pos Logger terakhir {self.last_logger}")
+        print("\nnew_prompt di function process_new_prompt", combined_text)
+        print(f"\nIntent di function procces_new_prompt adalah : {self.intent}")
+        print(f"\nPos Logger terakhir {self.last_logger}")
 
-        if self._should_use_memory(new_prompt) and not self._contains_explicit_logger_or_date(new_prompt):
-            print(f"DATA TERAKHIR adalah : {self.last_data}")
-            print("Menggunakan Memory")
-            context_window = self.get_context_window(window_size=4)
-            self._extract_context_memory(text=" ".join([m["content"] for m in context_window if m["role"] == "user"]))
-        else:
-            self._extract_context_memory(text=new_prompt)
+        # Ekstrak context logger dan tanggal dari prompt yang telah disambiguasi
+        self._extract_context_memory(text=combined_text)
 
         if self.intent in [
             "show_logger_data", "analyze_logger_by_date", "fetch_logger_by_date",
-            "show_selected_parameter", "compare_parameter_across_loggers", 
+            "show_selected_parameter", "compare_parameter_across_loggers",
             "compare_logger_data", "compare_logger_by_date"
         ]:
-            print(f"self.intent == {self.intent} HEHE it works at least ")
+            print(f"self.intent == {self.intent} HEHE it works at least")
             raw_targets = self.last_logger_list if self.last_logger_list else ([self.last_logger] if self.last_logger else [])
             print("raw_targets :", raw_targets)
             target = self._clean_logger_list(raw_targets)
-        # if self.intent in ['compare_parameter_across_loggers']:
-        #     print("HEHE it works at least")
-        #     print(f"Pos Logger terakhir {self.last_logger}")
         else:
             target = self.last_logger
 
-        # # ✅ Tambahkan di sini
-        # if (not target or target == []) and hasattr(self, "logger_suggestions"):
-        #     logger_fallbacks = list(self.logger_suggestions.values())[0]
-        #     print(f"[FALLBACK] Menggunakan saran logger: {logger_fallbacks}")
-        #     target = logger_fallbacks
-
-        # ✅ Return intent info + logger_suggestions
         print("\nDari function process_new_prompt untuk deteksi intent")
         print("=================")
         print(f" ✅ intent: {self.intent}, target: {target}, date: {self.last_date}")
@@ -512,9 +555,96 @@ class PromptProcessedMemory:
             "intent": self.intent,
             "target": target,
             "date": self.last_date,
-            "latest_prompt": new_prompt,
+            "latest_prompt": self.latest_prompt,
             "logger_suggestions": self.logger_suggestions if not target else {}
         }
+
+    def handle_direct_answer(self, answer_text: str) -> Dict:
+        print("📤 Menangani jawaban langsung dari LLM")
+        self.intent = "direct_answer"  # ✅ Simpan intent untuk digunakan oleh IntentManager
+        self.analysis_result = answer_text
+        return {
+            "intent": "direct_answer",
+            "target": None,
+            "date": None,
+            "latest_prompt": self.latest_prompt,
+            "logger_suggestions": {},
+            "response": answer_text
+        }
+
+    # def process_new_prompt(self, new_prompt: str) -> Dict:
+    #     print("process_new_prompt sedang berjalan")
+    #     # print(f"new_prompt : {new_prompt}")
+
+    #     is_same_prompt = self.latest_prompt == new_prompt
+    #     self.latest_prompt = new_prompt
+    #     self.prompt_history.append(new_prompt)
+
+    #     self.last_date = None
+
+    #     try:
+    #         predicted_intent = self._predict_intent_bert(new_prompt)
+    #         print("predicted_intent :", predicted_intent)
+    #         # Simpan intent sebelumnya hanya jika intent valid dan bukan "ai_limitation"
+    #         if predicted_intent != "ai_limitation" and self.intent is not None:
+    #             self.prev_intent = self.intent
+
+    #         self.intent = predicted_intent
+
+    #         print(f"self.intent {self.intent}")
+    #         print(f"self.prev_intent {self.prev_intent}")
+
+    #     except Exception as e:
+    #         print(f"[INTENT PREDICTION ERROR] {e}")
+    #         self.intent = "unknown_intent"
+
+    #     print("new_prompt di function process_new_prompt", new_prompt)
+    #     print(f"Intent di function procces_new_prompt adalah : {self.intent}")
+    #     print(f"Pos Logger terakhir {self.last_logger}")
+
+    #     if self._should_use_memory(new_prompt) and not self._contains_explicit_logger_or_date(new_prompt):
+    #         print(f"DATA TERAKHIR adalah : {self.last_data}")
+    #         print("Menggunakan Memory")
+    #         context_window = self.get_context_window(window_size=4)
+    #         self._extract_context_memory(text=" ".join([m["content"] for m in context_window if m["role"] == "user"]))
+    #     else:
+    #         self._extract_context_memory(text=new_prompt)
+
+    #     if self.intent in [
+    #         "show_logger_data", "analyze_logger_by_date", "fetch_logger_by_date",
+    #         "show_selected_parameter", "compare_parameter_across_loggers", 
+    #         "compare_logger_data", "compare_logger_by_date"
+    #     ]:
+    #         print(f"self.intent == {self.intent} HEHE it works at least ")
+    #         raw_targets = self.last_logger_list if self.last_logger_list else ([self.last_logger] if self.last_logger else [])
+    #         print("raw_targets :", raw_targets)
+    #         target = self._clean_logger_list(raw_targets)
+    #     # if self.intent in ['compare_parameter_across_loggers']:
+    #     #     print("HEHE it works at least")
+    #     #     print(f"Pos Logger terakhir {self.last_logger}")
+    #     else:
+    #         target = self.last_logger
+
+    #     # # ✅ Tambahkan di sini
+    #     # if (not target or target == []) and hasattr(self, "logger_suggestions"):
+    #     #     logger_fallbacks = list(self.logger_suggestions.values())[0]
+    #     #     print(f"[FALLBACK] Menggunakan saran logger: {logger_fallbacks}")
+    #     #     target = logger_fallbacks
+
+    #     # ✅ Return intent info + logger_suggestions
+    #     print("\nDari function process_new_prompt untuk deteksi intent")
+    #     print("=================")
+    #     print(f" ✅ intent: {self.intent}, target: {target}, date: {self.last_date}")
+    #     print("\n")
+
+    #     return {
+    #         "intent": self.intent,
+    #         "target": target,
+    #         "date": self.last_date,
+    #         "latest_prompt": new_prompt,
+    #         "logger_suggestions": self.logger_suggestions if not target else {}
+    #     }
+    
     def reset_memory_if_chat_too_long(self, max_user_messages: int = 4):
         user_msg_count = sum(1 for m in self.user_messages if m["role"] == "user")
         print(f"[INFO] Jumlah chat user: {user_msg_count}")
@@ -713,7 +843,8 @@ class IntentManager:
             "how_it_works": self.explain_system, # safe id_logger, date_info, fetched data(before llm)
             "analyze_logger_by_date": self.analyze_by_date, # safe id_logger, date_info, fetched data(before llm)
             "ai_limitation": self.ai_limitation, # safe id_logger, date_info, fetched data(before llm)
-            "show_online_logger" : self.connection_status # safe id_logger, date_info, fetched data(before llm)
+            "show_online_logger" : self.connection_status, # safe id_logger, date_info, fetched data(before llm)
+            "direct_answer": self.direct_answer
         }
     # def handle_intent(self):
     #     prompt = self.memory.latest_prompt
@@ -912,15 +1043,16 @@ class IntentManager:
 
     #     return "\n\n---\n\n".join(summaries)
 
-        # if not fetched:
-        #     return "Tidak ditemukan data untuk logger yang disebutkan."
+    #     if not fetched:
+    #         return "Tidak ditemukan data untuk logger yang disebutkan."
 
-        # for item in fetched:
-        #     print(f"\n📍 {item['logger_name']}")
-        #     for key, value in item['data'].items():
-        #         print(f"{key}: {value}")
+    #     for item in fetched:
+    #         print(f"\n📍 {item['logger_name']}")
+    #         for key, value in item['data'].items():
+    #             print(f"{key}: {value}")
 
-        # return f"Berhasil mengambil data terbaru dari {len(fetched)} logger."
+    #     return f"Berhasil mengambil data terbaru dari {len(fetched)} logger."
+    
     def fetch_data_range(self):
         print("fetch_logger_by_date ini telah berjalan")
 
@@ -1055,7 +1187,7 @@ class IntentManager:
         prompt = self.memory.latest_prompt
         target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
         logger_list = fetch_list_logger()
-         # === Deteksi parameter dari prompt (sensor yang ingin ditampilkan)
+        # === Deteksi parameter dari prompt (sensor yang ingin ditampilkan)
         matched_parameters = []
         for param, aliases in sensor_aliases.items():
             for alias in aliases:
@@ -1394,6 +1526,10 @@ class IntentManager:
         final_content = response["message"]["content"]
 
         return final_content
+
+    def direct_answer(self):
+        print("✅ Handler untuk jawaban langsung dijalankan")
+        return self.memory.analysis_result or "✅ Jawaban telah diberikan langsung oleh sistem."
 
     def fallback_response(self):
         print("Fallback intent dijalankan")
