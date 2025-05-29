@@ -480,8 +480,18 @@ class PromptProcessedMemory:
             print("🧠 Jawaban awal dari LLM:", content)
 
             if content == "[AMBIGUOUS]":
-                print("🟨 Prompt terlalu ambigu, tidak disusun ulang oleh LLM.")
-                return user_messages[-1]["content"], False
+                # Susun ulang pertanyaan eksplisit
+                clarification_prompt = (
+                    "Anda adalah asisten AI untuk sistem monitoring telemetri. "
+                    "Gunakan konteks berdasarkan **informasi yang telah disebutkan secara eksplisit** dalam riwayat percakapan sebelumnya untuk menyusun ulang maksud pengguna secara eksplisit. "
+                    "Tulis ulang dalam satu kalimat perintah eksplisit singkat, seperti 'Tampilkan suhu udara pos yang terpanas'. "
+                    "Jawaban hanya boleh satu kalimat perintah yang jelas."
+                )
+                clarification_messages = [{"role": "system", "content": clarification_prompt}] + user_messages
+
+                clarification_response = chat(messages=clarification_messages, model=model_name)
+                clarified_text = clarification_response['message']['content'] if isinstance(clarification_response, dict) else clarification_response.message.content
+                return clarified_text.strip(), False
 
             elif content == "[NO ANSWER]":
                 return user_messages[-1]["content"], False
@@ -509,11 +519,16 @@ class PromptProcessedMemory:
 
         if is_direct_answer:
             print("\n✅ Ini adalah jawaban langsung dari LLM, tidak perlu intent.")
-            return self.handle_direct_answer(combined_text)  # Fungsi penanganan langsung
+            return self.handle_direct_answer(combined_text)
 
-        # Jika bukan jawaban langsung → proses seperti biasa
-        self.latest_prompt = combined_text
-        self.prompt_history.append(combined_text)
+        # 🔁 Jika hasil resolve adalah prompt asli user (karena [NO ANSWER]), kembalikan new_prompt, bukan hasil LLM
+        if combined_text.strip() == new_prompt.strip():
+            print("⚠️ LLM tidak bisa menyimpulkan. Menggunakan prompt asli user sebagai basis intent.")
+            self.latest_prompt = new_prompt
+        else:
+            self.latest_prompt = combined_text
+
+        self.prompt_history.append(self.latest_prompt)
         self.last_date = None
 
         try:
