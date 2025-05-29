@@ -446,7 +446,7 @@ class PromptProcessedMemory:
         print("\n🧠 resolve_ambiguous_prompt_with_llm berjalan...")
 
         # ✅ Jika tidak ada konteks percakapan sebelumnya (user_messages terlalu sedikit), kembalikan langsung
-        if len(user_messages) <= 1:
+        if len(user_messages) <= 2:
             print("⚠️ Tidak ada konteks sebelumnya. Gunakan prompt terakhir langsung.")
             return user_messages[-1]["content"], False
 
