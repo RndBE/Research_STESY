@@ -456,10 +456,19 @@ class PromptProcessedMemory:
             "Tugas Anda adalah menjawab pertanyaan terakhir dari pengguna berdasarkan **informasi yang telah disebutkan secara eksplisit** dalam riwayat percakapan sebelumnya. "
             "**Wajib periksa riwayat secara teliti dan jangan pernah mengarang, menyimpulkan, atau mengisi kekosongan dari asumsi.** "
             "Jika jawaban dapat ditemukan secara jelas dari data sebelumnya, berikan jawaban langsung (maksimal satu kalimat). "
-            
+            "Jika pertanyaan terakhir terlalu ambigu (misalnya 'ya', 'lanjutkan', 'jelaskan', 'ok', 'sip', 'oke', 'baiklah', 'iya?', 'betul?'), balas dengan: [AMBIGUOUS]. "
+            "Jika informasi untuk menjawab tidak tersedia secara eksplisit di chat sebelumnya, balas dengan: [NO ANSWER]. "
             "Jawaban hanya boleh salah satu dari:\n"
             "- jawaban langsung (jika tersedia di chat sebelumnya),\n"
-            
+            "- [AMBIGUOUS], atau\n"
+            "- [NO ANSWER]."
+            "\n\nContoh:\n"
+            "User: tampilkan data pos kali bawang\n"
+            "Assistant: Pos tidak ditemukan. Apakah maksud Anda 'pos arr kali bawang'?\n"
+            "User: iya?\n"
+            "→ Maka Anda harus membalas: [AMBIGUOUS]\n\n"
+            "User: tampilkan suhu udara tertinggi\n"
+            "→ Jika suhu udara belum disebutkan di percakapan sebelumnya, maka Anda harus membalas: [NO ANSWER]"
         )
 
         messages_for_llm = [{"role": "system", "content": reasoning_prompt}] + user_messages
@@ -471,17 +480,8 @@ class PromptProcessedMemory:
             print("🧠 Jawaban awal dari LLM:", content)
 
             if content == "[AMBIGUOUS]":
-                # Susun ulang pertanyaan eksplisit
-                clarification_prompt = (
-                    "Anda adalah asisten AI untuk sistem monitoring telemetri. "
-                    "Gunakan konteks berdasarkan informasi eksplisit dari percakapan sebelumnya untuk menyusun ulang maksud pengguna secara eksplisit. "
-                    "Tulis ulang dalam satu kalimat perintah eksplisit singkat."
-                )
-                clarification_messages = [{"role": "system", "content": clarification_prompt}] + user_messages
-
-                clarification_response = chat(messages=clarification_messages, model=model_name)
-                clarified_text = clarification_response['message']['content'] if isinstance(clarification_response, dict) else clarification_response.message.content
-                return clarified_text.strip(), False
+                print("🟨 Prompt terlalu ambigu, tidak disusun ulang oleh LLM.")
+                return user_messages[-1]["content"], False
 
             elif content == "[NO ANSWER]":
                 return user_messages[-1]["content"], False
