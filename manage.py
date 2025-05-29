@@ -445,24 +445,21 @@ class PromptProcessedMemory:
     def resolve_ambiguous_prompt_with_llm(self, user_messages: List[Dict], model_name: str = "llama3.1:8b") -> Tuple[str, bool]:
         print("\n🧠 resolve_ambiguous_prompt_with_llm berjalan...")
 
+        # ✅ Jika tidak ada konteks percakapan sebelumnya (user_messages terlalu sedikit), kembalikan langsung
+        if len(user_messages) <= 1:
+            print("⚠️ Tidak ada konteks sebelumnya. Gunakan prompt terakhir langsung.")
+            return user_messages[-1]["content"], False
+
+        # Prompt untuk reasoning
         reasoning_prompt = (
             "Anda adalah asisten AI untuk sistem monitoring telemetri. "
             "Tugas Anda adalah menjawab pertanyaan terakhir dari pengguna berdasarkan **informasi yang telah disebutkan secara eksplisit** dalam riwayat percakapan sebelumnya. "
             "**Wajib periksa riwayat secara teliti dan jangan pernah mengarang, menyimpulkan, atau mengisi kekosongan dari asumsi.** "
             "Jika jawaban dapat ditemukan secara jelas dari data sebelumnya, berikan jawaban langsung (maksimal satu kalimat). "
-            "Jika pertanyaan terakhir terlalu ambigu (misalnya 'ya', 'lanjutkan', 'jelaskan', 'pos tersebut', dsb), balas dengan: [AMBIGUOUS]. "
-            "Jika informasi untuk menjawab tidak tersedia secara eksplisit di chat sebelumnya, balas dengan: [NO ANSWER]. "
+            
             "Jawaban hanya boleh salah satu dari:\n"
             "- jawaban langsung (jika tersedia di chat sebelumnya),\n"
-            "- [AMBIGUOUS], atau\n"
-            "- [NO ANSWER]."
-            "\n\nContoh:\n"
-            "User: tampilkan data pos kali bawang\n"
-            "Assistant: Pos tidak ditemukan. Apakah maksud Anda 'pos arr kali bawang'?\n"
-            "User: iya?\n"
-            "→ Maka Anda harus membalas: [AMBIGUOUS]\n\n"
-            "User: tampilkan suhu udara tertinggi\n"
-            "→ Jika suhu udara belum disebutkan di percakapan sebelumnya, maka Anda harus membalas: [NO ANSWER]"
+            
         )
 
         messages_for_llm = [{"role": "system", "content": reasoning_prompt}] + user_messages
@@ -477,9 +474,8 @@ class PromptProcessedMemory:
                 # Susun ulang pertanyaan eksplisit
                 clarification_prompt = (
                     "Anda adalah asisten AI untuk sistem monitoring telemetri. "
-                    "Gunakan konteks dari percakapan sebelumnya untuk menyusun ulang maksud pengguna secara eksplisit. "
-                    "Tulis ulang dalam satu kalimat perintah eksplisit, seperti 'Tampilkan suhu udara pos yang terpanas'. "
-                    "Jawaban hanya boleh satu kalimat perintah yang jelas."
+                    "Gunakan konteks berdasarkan informasi eksplisit dari percakapan sebelumnya untuk menyusun ulang maksud pengguna secara eksplisit. "
+                    "Tulis ulang dalam satu kalimat perintah eksplisit singkat."
                 )
                 clarification_messages = [{"role": "system", "content": clarification_prompt}] + user_messages
 
@@ -488,16 +484,15 @@ class PromptProcessedMemory:
                 return clarified_text.strip(), False
 
             elif content == "[NO ANSWER]":
-                # Kembalikan prompt terakhir
                 return user_messages[-1]["content"], False
 
             else:
-                # Jawaban langsung
                 return content, True
 
         except Exception as e:
             print("❌ Gagal memproses LLM:", e)
             return user_messages[-1]["content"], False
+
 
     def process_new_prompt(self, new_prompt: str) -> Dict:
         print("\nprocess_new_prompt sedang berjalan\n")
