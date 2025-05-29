@@ -50,7 +50,11 @@ class PromptProcessedMemory:
         self.intent: Optional[str] = None
         self.analysis_result: Optional[str] = None
         self.last_data: Optional[str] = None  # ✅ Untuk analisa tanpa perlu fetch ulang
-        self.last_logger_source: Optional[str] = None    
+        self.last_logger_source: Optional[str] = None 
+
+        self.last_logger_data: Dict[str, Dict] = {}
+        self.last_logger_ids: List[str] = []
+   
 
         self.prev_intent: Optional[str] = None
         self.prev_target: Optional[str] = None
@@ -86,6 +90,7 @@ class PromptProcessedMemory:
                     self.last_logger_id = data.get("last_logger_id")
                     self.last_date = data.get("last_date")
                     self.last_logger_list = data.get("last_logger_list", [])
+                    self.last_data = data.get("last_logger_list", [])
         except Exception as e:
             print(f"[MEMORY LOAD ERROR] {e}")
 
@@ -95,7 +100,8 @@ class PromptProcessedMemory:
                 "last_logger": self.last_logger,
                 "last_logger_id": self.last_logger_id,
                 "last_date": self.last_date,
-                "last_logger_list": self.last_logger_list  # ✅ Tambahkan ini
+                "last_logger_list": self.last_logger_list,  # ✅ Tambahkan ini
+                "last_data" : self.last_data
             }
             with open(self._get_memory_path(), "w", encoding="utf-8") as f:
                 json.dump(data, f)
@@ -132,21 +138,87 @@ class PromptProcessedMemory:
     def confirm_logger_from_previous_suggestion(self, previous_assistant_message: str, user_reply: str) -> Optional[str]:
         """
         Jika user menjawab 'ya' dan assistant sebelumnya memberi saran logger,
-        maka ambil logger yang disarankan pertama.
+        maka ambil logger yang disarankan pertama.t
         """
+        CONFIRM_YES_SYNONYMS = {
+            # Karakter ekspresif/random
+            "?", "??", "???", "????", "!", "!!", "!!!", "!!!!", "!!!!!", "...", "....", "......","ya","ya kaliurang",
+            # Variasi dasar & pertanyaan
+            "ya", "iya", "iya?", "iya!", "iya?!", "betul", "betul?", "benar", "benar?", "bener", "bener?",
+            "betool", "betool?", "betool!!", "betool!", "benerrr", "benerrrr!","boleh",
+            # Variasi informal dan slang
+            "yoi", "yap", "y", "yo", "sip", "ok", "oke", "okey", "yes", "yess", "yesss", "you bet", "yosh", "yoa", "yo’i",
+            # Tambahan penekanan/emosi
+            "ya dong", "iya deh", "iya banget", "iya lah", "iyalah", "iyalah sayang", "iyaa", "iyaa dong", "iyaa!", "iyap", 
+            "yes dong", "yes lah", "yes banget", "yes yes!",
+            # Kata penegasan atau afirmatif
+            "udah pasti", "jelas", "jelas banget", "pastinya", "tentu", "tentu saja", "pasti", "pastilah", "bener banget",
+            # Chat slang/kasual + ekspresi acak
+            "gas", "cus", "gass", "gasss", "gaskeun", "mantap", "mantul", "sip deh", "sippp", "sippp!", "sipppp", "siap", "siap!", 
+            "go!", "ayoo!", "ayok", "hayuk", "lanjut", "langsung aja", "okedeh", "ok sip", "ok gas", "langsung gas",
+            # Emoji & kombinasi
+            "ya 👍", "oke 👍", "sip 👍", "yoi 💪", "yes ✅", "betul ✅", "iyes ✅", "mantap 🔥", "sippp 🔥", "cus 💨", "gaspol 🔥",
+            # Tambahan karakter random dan ekspresi lebih bebas
+            "iyaa~", "iyaaa", "iyaaa!!", "iyaa bgt", "iyes!", "okeee", "oke deh~", "yes!", "yeees", "yeeees!", "yaaaa",
+            "gaskeun!", "gasskan!", "gasskeun dong", "mantab!", "mantabb!", "mantabb banget!", "langsungkeun!", "yappp", "yaaa gpp",
+            # Tambahkan kombinasi konfirmasi dan nama lokasi logger
+            "ya kaliurang", "boleh kaliurang", "iya kaliurang", "ok kaliurang", "sip kaliurang",
+            "ya bronggang", "boleh bronggang", "iya bronggang", "ok bronggang", "sip bronggang",
+            "ya kemput", "boleh kemput", "iya kemput", "ok kemput", "sip kemput",
+            "ya seturan", "boleh seturan", "iya seturan", "ok seturan", "sip seturan",
+            "ya papringan", "boleh papringan", "iya papringan", "ok papringan", "sip papringan",
+            "ya pogung", "boleh pogung", "iya pogung", "ok pogung", "sip pogung",
+            "ya sinduadi", "boleh sinduadi", "iya sinduadi", "ok sinduadi", "sip sinduadi",
+            "ya bendungan", "boleh bendungan", "iya bendungan", "ok bendungan", "sip bendungan",
+            "ya opak pulo", "boleh opak pulo", "iya opak pulo", "ok opak pulo", "sip opak pulo",
+            "ya bantar", "boleh bantar", "iya bantar", "ok bantar", "sip bantar",
+            "ya kedungmiri", "boleh kedungmiri", "iya kedungmiri", "ok kedungmiri", "sip kedungmiri",
+            "ya bunder", "boleh bunder", "iya bunder", "ok bunder", "sip bunder",
+            "ya gemawang", "boleh gemawang", "iya gemawang", "ok gemawang", "sip gemawang",
+            "ya singkung", "boleh singkung", "iya singkung", "ok singkung", "sip singkung",
+            "ya sapon", "boleh sapon", "iya sapon", "ok sapon", "sip sapon",
+            "ya hargorejo", "boleh hargorejo", "iya hargorejo", "ok hargorejo", "sip hargorejo",
+            "ya sanden", "boleh sanden", "iya sanden", "ok sanden", "sip sanden",
+            "ya ngawen", "boleh ngawen", "iya ngawen", "ok ngawen", "sip ngawen",
+            "ya angin-angin", "boleh angin-angin", "iya angin-angin", "ok angin-angin", "sip angin-angin",
+            "ya seyegan", "boleh seyegan", "iya seyegan", "ok seyegan", "sip seyegan",
+            "ya godean", "boleh godean", "iya godean", "ok godean", "sip godean",
+            "ya prumpung", "boleh prumpung", "iya prumpung", "ok prumpung", "sip prumpung",
+            "ya giriwungu", "boleh giriwungu", "iya giriwungu", "ok giriwungu", "sip giriwungu",
+            "ya borrowarea", "boleh borrowarea", "iya borrowarea", "ok borrowarea", "sip borrowarea",
+            "ya terong", "boleh terong", "iya terong", "ok terong", "sip terong",
+            "ya kedungkeris", "boleh kedungkeris", "iya kedungkeris", "ok kedungkeris", "sip kedungkeris",
+            "ya barongan", "boleh barongan", "iya barongan", "ok barongan", "sip barongan",
+            "ya pengasih", "boleh pengasih", "iya pengasih", "ok pengasih", "sip pengasih",
+            "ya kali bawang", "boleh kali bawang", "iya kali bawang", "ok kali bawang", "sip kali bawang",
+            "ya wonokromo", "boleh wonokromo", "iya wonokromo", "ok wonokromo", "sip wonokromo",
+            "ya tegal", "boleh tegal", "iya tegal", "ok tegal", "sip tegal",
+            "ya beran", "boleh beran", "iya beran", "ok beran", "sip beran",
+            "ya gembongan", "boleh gembongan", "iya gembongan", "ok gembongan", "sip gembongan",
+            "ya santan", "boleh santan", "iya santan", "ok santan", "sip santan",
+            "ya plataran", "boleh plataran", "iya plataran", "ok plataran", "sip plataran",
+            "ya nyemengan", "boleh nyemengan", "iya nyemengan", "ok nyemengan", "sip nyemengan",
+            "ya gedhangan", "boleh gedhangan", "iya gedhangan", "ok gedhangan", "sip gedhangan",
+            "ya beji", "boleh beji", "iya beji", "ok beji", "sip beji",
+            "ya gumuk", "boleh gumuk", "iya gumuk", "ok gumuk", "sip gumuk"
+        }
         print("confirm_logger_from_previous_suggestion telah berjalan")
+
         user_reply = user_reply.strip().lower()
         prev_msg = previous_assistant_message.strip().lower()
+        print(f"latest User Messages is : {user_reply}")
+        print(f"Previous Messages is : {prev_msg}")
 
-        if user_reply in {"ya", "iya", "betul", "benar"} and "tidak dikenali" in prev_msg:
+        if user_reply in CONFIRM_YES_SYNONYMS and "anda maksud adalah" in prev_msg:
             # Ambil logger dari kalimat seperti: "Apakah maksud Anda: 'pos arr kemput'?"
             match = re.findall(r"'(pos [^']+)'", previous_assistant_message)
             print("match :", match)
             if match:
-                confirmed_logger = match[1]
+                confirmed_logger = match[0]
                 print(f"🤖 Logger dikonfirmasi oleh user: {confirmed_logger}")
                 return confirmed_logger
-        
+            else :
+                print("Gagal Mendapatkan konfirmasi logger")
         return None
     
     def _extract_context_memory(self, text: Optional[str] = None):
@@ -166,13 +238,19 @@ class PromptProcessedMemory:
             logger_names_from_db = [normalize_logger_name(lg["nama_lokasi"]) for lg in logger_data if "nama_lokasi" in lg]
             normalized_valid_loggers = set(logger_names_from_db)
             print(f"✅ {len(normalized_valid_loggers)} logger valid dimuat.")
+
+            # Hitung kemunculan nama lokasi yang sama tanpa prefix
+            from collections import Counter
+            stripped_names = [name.replace("pos ", "").strip() for name in logger_names_from_db]
+            normalized_counter = Counter(stripped_names)
         except Exception as e:
             print("❌ [ERROR] fetch_list_logger gagal:", e)
             normalized_valid_loggers = set()
+            normalized_counter = {}
 
         logger_pattern = r"\b(?:logger|pos|afmr|awlr|awr|arr|adr|awqr|avwr|awgc)\s+(?:[a-z]{3,}(?:\s+[a-z]{3,}){0,3})"
         raw_matches = re.findall(logger_pattern, combined_text)
-        print("🔍 logger_match (raw):", raw_matches)
+        print(f"🔍 logger_match (raw):, {raw_matches}, Prompt : {self.latest_prompt}")
 
         expanded_matches = self._clean_logger_list(raw_matches)
         print("🧩 expanded_matches:", expanded_matches)
@@ -193,13 +271,17 @@ class PromptProcessedMemory:
             if norm in normalized_valid_loggers:
                 cleaned_matches.add(norm)
             else:
-                suggestions = get_close_matches(norm, normalized_valid_loggers, n=1, cutoff=0.6)
+                stripped_norm = norm.replace("pos ", "").strip()
+                if stripped_norm in {"sapon", "kali bawang"}:
+                    n_suggestions = 2
+                else:
+                    n_suggestions = min(normalized_counter.get(stripped_norm, 2), 3)
+
+                print("Jumlah suggestions:", n_suggestions)
+                suggestions = get_close_matches(norm, normalized_valid_loggers, n=n_suggestions, cutoff=0.7)
                 if suggestions:
                     self.logger_suggestions[norm] = suggestions
-                    # cleaned_matches = suggestions
                 print(f"⚠️ Tidak valid: {norm} — Saran: {suggestions}")
-                
-        # print(f"cleaned_matches = {cleaned_matches}")
 
         if cleaned_matches:
             self.last_logger_list = list(cleaned_matches)
@@ -209,12 +291,7 @@ class PromptProcessedMemory:
         else:
             print(f"🚫 Tidak ada logger valid ditemukan — mempertahankan last_logger sebelumnya. Yaitu {self.last_logger_list}")
             self.last_logger_list = self.last_logger_list or []
-            # ❗️Jangan ubah self.last_logger, biarkan tetap bernilai sebelumnya
-            # self.last_logger_list = []
-            # self.last_logger = None
-            # print("🚫 Tidak ada logger valid ditemukan.")
 
-        # === Ekstraksi tanggal
         date_keywords = [
             "hari ini", "kemarin", "kemaren", "minggu ini", "minggu lalu", "bulan lalu",
             "awal bulan", "akhir bulan", "tahun lalu", "minggu terakhir", "bulan terakhir", "hari terakhir"
@@ -236,6 +313,7 @@ class PromptProcessedMemory:
                 self.last_date = match.group(0)
                 print("🗓️ Deteksi tanggal (relatif):", self.last_date)
                 break
+
 
 
     # def _extract_context_memory(self, text: Optional[str] = None):
@@ -321,6 +399,7 @@ class PromptProcessedMemory:
 
 
     def _should_use_memory(self, prompt: str) -> bool:
+        print("_should_use_memory telah berjalan HEHE")
         prompt = prompt.lower()
         ambiguous_terms = [
             "data di atas", "kesimpulan", "bagaimana tadi", "tadi", "lanjutkan",
@@ -375,7 +454,17 @@ class PromptProcessedMemory:
         self.last_date = None
 
         try:
-            self.intent = self._predict_intent_bert(new_prompt)
+            predicted_intent = self._predict_intent_bert(new_prompt)
+            print("predicted_intent :", predicted_intent)
+            # Simpan intent sebelumnya hanya jika intent valid dan bukan "ai_limitation"
+            if predicted_intent != "ai_limitation" and self.intent is not None:
+                self.prev_intent = self.intent
+
+            self.intent = predicted_intent
+
+            print(f"self.intent {self.intent}")
+            print(f"self.prev_intent {self.prev_intent}")
+
         except Exception as e:
             print(f"[INTENT PREDICTION ERROR] {e}")
             self.intent = "unknown_intent"
@@ -385,6 +474,8 @@ class PromptProcessedMemory:
         print(f"Pos Logger terakhir {self.last_logger}")
 
         if self._should_use_memory(new_prompt) and not self._contains_explicit_logger_or_date(new_prompt):
+            print(f"DATA TERAKHIR adalah : {self.last_data}")
+            print("Menggunakan Memory")
             context_window = self.get_context_window(window_size=4)
             self._extract_context_memory(text=" ".join([m["content"] for m in context_window if m["role"] == "user"]))
         else:
@@ -624,7 +715,6 @@ class IntentManager:
             "ai_limitation": self.ai_limitation, # safe id_logger, date_info, fetched data(before llm)
             "show_online_logger" : self.connection_status # safe id_logger, date_info, fetched data(before llm)
         }
-
     # def handle_intent(self):
     #     prompt = self.memory.latest_prompt
     #     intent = self.memory.intent
@@ -669,7 +759,10 @@ class IntentManager:
         print(f"Dari Prompt {prompt} Intent adalah : {intent}, target logger adalah : {target_loggers}")
         if not target_loggers or not logger_list:
             return "Target logger atau daftar logger tidak tersedia."
-
+        if self.memory.last_data != None :
+            print("Data yang disimpan", self.memory.last_data)
+        if self.memory.last_data == None :
+            print("Tidak Menyimpan data")
         # === Deteksi parameter yang diminta dari prompt
         matched_parameters = []
         for param, aliases in sensor_aliases.items():
@@ -729,6 +822,11 @@ class IntentManager:
                 summary = summarize_logger_data(nama_lokasi, data)
                 summaries.append(summary)
 
+            #  2 code dibawah ini sudah saya tambahkan ke _init_(), 
+            # bagaimana menyesuaikan 2 baris dibawah ini ke dalam function ini untuk menyimpan nama logger
+            # self.last_logger_data: Dict[str, Dict] = {}
+            # self.last_logger_ids: List[str] = []
+
             # ✅ Simpan hanya 1 logger (yang pertama) ke memory
             if item.get("logger_id"): # not self.memory.last_logger_id and 
                 self.memory.last_logger_id = item["logger_id"]
@@ -737,6 +835,7 @@ class IntentManager:
                 self.memory.analysis_result = None  # Reset analisis jika sebelumnya ada
 
                 print(f"✅ Disimpan ke memory: {self.memory.intent} / {self.memory.last_logger_id} / {self.memory.last_logger}")
+                print("DATA YANG TERSIMPAN ADALAH : ",self.memory.last_data)
                 
         self.memory._save_user_memory()
 
@@ -951,7 +1050,7 @@ class IntentManager:
     def show_list_logger(self):
         return fetch_list_logger_from_prompt_flexibleV1(self.memory.latest_prompt)
 
-    def compare_by_date(self):
+    def compare_by_date(self): 
         print("compare_logger_by_date ini telah berjalan")
         prompt = self.memory.latest_prompt
         target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
@@ -973,11 +1072,15 @@ class IntentManager:
         )
 
     def compare_latest_data(self):
+        print("compare_latest_data ini telah berjalan")
         prompt = self.memory.latest_prompt
         target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
         logger_list = fetch_list_logger()
         matched_parameters = []
         fetched = find_and_fetch_latest_data(target_loggers, matched_parameters, logger_list)
+
+        print(f"Fetched Data adalah : {fetched}")
+
         # 🔥 Gunakan summary sebagai tampilan perbandingan data
         summaries = []
         for item in fetched:
@@ -1260,7 +1363,9 @@ class IntentManager:
             return "Prompt tidak mengandung kata kunci koneksi seperti aktif, offline, signal, dll."
 
     def ai_limitation(self):
+        print("ai_limitation telah berjalan untuk merespon di luar cakupan")
         prompt = self.memory.latest_prompt
+        print(f"Latest ai_limitation prompt {prompt}")
         model_name = "llama3.1:8b"
         print("Intent deteksi limitation berjalan")
 
@@ -1275,6 +1380,7 @@ class IntentManager:
                     "- Cuaca\n"
                     "- Klimatologi\n"
                     "- Analisis data logger\n\n"
+                    "jika pertanyaan user "
                     "Jika pertanyaan user sesuai konteks di atas, berikan jawaban secara informatif, jelas, dan dalam format markdown jika relevan.\n\n"
                     "Namun jika pertanyaan user berada di luar topik (misalnya tentang sejarah, teknologi umum, hiburan, atau tidak ada hubungannya dengan sistem telemetri), "
                     "**tolak dengan sopan boleh tambahkan emoticon**:\n"

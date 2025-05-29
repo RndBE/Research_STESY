@@ -43,6 +43,7 @@ def chat_endpoint():
         # ✅ Deteksi jika user mengkonfirmasi saran logger sebelumnya
         print("prev_assistant_msg", prev_assistant_msg)
         confirmed_logger = memory.confirm_logger_from_previous_suggestion(prev_assistant_msg, last_msg)
+        print(f"confirmed_logger adalah : {confirmed_logger}" )
         if confirmed_logger:
             intent_info = memory.process_new_prompt(confirmed_logger)
             result = intent_manager.handle_intent()
@@ -72,8 +73,8 @@ def chat_endpoint():
                     #     f"Nama logger '{invalid_logger}' tidak dikenali. Apakah maksud Anda: " +
                     #     ", ".join(f"'{c}'" for c in candidates) + "?"
                     # )
-                    suggestions_text.append(
-                        f"Maaf nama pos telemteri '{invalid_logger}' tidak dikenali. Apakah pos yang anda maksud adalah " +
+                    suggestions_text.append( # kami mendeteksi ada 
+                        f"Kami mendeteksi ada '{len(candidates)}' logger dengan nama yang sama. Apakah pos yang anda maksud adalah " +
                         ", ".join(f"'{c}'" for c in candidates) + "?"
                     )
             return jsonify({
@@ -103,7 +104,7 @@ def chat_endpoint():
         return jsonify({
             "model": model_name,
             "created_at": datetime.now(timezone.utc).isoformat() + "Z",
-            "message": {"role": "assistant", "content": "❌ Maaf, terjadi kesalahan saat memproses permintaan Anda."}
+            "message": {"role": "assistant", "content": "Maaf, terjadi kesalahan saat memproses permintaan Anda."}
         }), 500
 
 
