@@ -136,7 +136,7 @@ def original_fetch_data_range(prompt: str, target_loggers: list, matched_paramet
         for logger in logger_list
     }
     all_logger_names = list(normalized_choices.keys())
-    summaries = [] 
+    # summaries = [] 
 
     for name_fragment in target_loggers:
         query = normalize(name_fragment)
@@ -180,16 +180,16 @@ def original_fetch_data_range(prompt: str, target_loggers: list, matched_paramet
                         data = filtered_data
 
                     # ✅ Simpan ke summary
-                    summary = summarize_logger_data(logger_name, data)
-                    summaries.append(summary)
+                    # summary = summarize_logger_data(logger_name, data)
+                    # summaries.append(data)
 
             except Exception as e:
                 print(f"[ERROR] Gagal fetch data untuk {logger_name}: {e}")
 
     # 🔚 Return hasil
-    if summaries:
-        print("fetched data adalah :", summaries)
-        return "\n\n---\n\n".join(summaries)
+    if data:
+        print("fetched data adalah :", data)
+        return data
     else:
         return "Tidak ditemukan data yang cocok untuk logger yang dimaksud."
 
@@ -625,7 +625,6 @@ def summarize_logger_data(nama_lokasi, latest_data, model_name="llama3.1:8b"):
     # "jelaskan apakah nilainya termasuk kategori rendah, sedang, atau tinggi berdasarkan konteks umum. "
     # "Gunakan gaya bahasa informatif dan ringkas.\n\n"
     # Analisis tren parameter yang tersedia (jika terlihat), sebutkan nilai tertinggi dan terendah, dan jelaskan apakah nilainya termasuk kategori rendah, sedang, atau tinggi berdasarkan konteks umum. 
-
 
     user_prompt = (
         f"Tampilkan data lengkap dari logger **{nama_lokasi}** dalam format markdown.\n\n"

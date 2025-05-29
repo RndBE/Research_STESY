@@ -882,6 +882,7 @@ class IntentManager:
 
     def fetch_latest_data(self):
         print("intent show_logger_data ini telah berjalan")
+        model_name = "llama3.1:8b"
         prompt = self.memory.latest_prompt.lower()
         intent = self.memory.intent
         target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
@@ -908,7 +909,7 @@ class IntentManager:
         fetched = find_and_fetch_latest_data(target_loggers, matched_parameters, logger_list)
 
         summaries = []
-        last_data_buffer = []
+        # last_data_buffer = []
 
         for item in fetched:
             nama_lokasi = item['logger_name']
@@ -925,7 +926,6 @@ class IntentManager:
             missing_params = [p for p in matched_parameters if p not in data_keys]
 
             if missing_params:
-                model_name = "llama3.1:8b"
                 missing_param_str = ', '.join(missing_params)
                 user_prompt = (
                     f"Tolong jawab permintaan data logger dari pengguna sesuai konteks prompt{prompt}.\n\n"
@@ -949,9 +949,34 @@ class IntentManager:
                 response = chat(model=model_name, messages=messages)
                 summaries.append(response["message"]["content"])
             else:
+                user_prompt = (
+                    f"Tampilkan data lengkap dari logger **{nama_lokasi}** dalam format markdown.\n\n"
+                    f"Berikut adalah semua parameter yang tersedia:\n\n"
+                    f"{data}\n\n"
+                    "Berikan kesimpulan dalam satu paragraf pendek dari data logger berikut. \n"
+                    "Analisis tren parameter yang tersedia (jika terlihat), sebutkan nilai tertinggi dan terendah, dan jelaskan apakah nilainya termasuk kategori rendah, sedang, atau tinggi berdasarkan konteks umum. \n"
+                    "Cukup tampilkan semua data dalam urutan seperti yang diberikan.\n"
+                    f"Awali dengan judul: **Data Monitoring Telemetri {nama_lokasi}**\n"
+                    "Tambahkan garis pemisah '=====' di bawah judul."
+                )
+
+                messages = [
+                    {
+                        "role": "system",
+                        "content": (
+                            "Anda adalah asisten telemetri pintar.\n"
+                            "Tugas Anda adalah memberikan satu ringkasan berdasarkan data logger yang tersedia.\n"
+                            "Ringkasan harus objektif, dan relevan — hindari penjelasan berlebihan."
+                        )
+                    },
+                    {"role": "user", "content": user_prompt}
+                ]
+                response = chat(model=model_name, messages=messages, options={"num_predict": 1024})
+                summaries.append(response["message"]["content"])
+
                 # Ada data parameter, buat ringkasan normal
-                summary = summarize_logger_data(nama_lokasi, data)
-                summaries.append(summary)
+                # summary = summarize_logger_data(nama_lokasi, data)
+                # summaries.append(summary)
 
             #  2 code dibawah ini sudah saya tambahkan ke _init_(), 
             # bagaimana menyesuaikan 2 baris dibawah ini ke dalam function ini untuk menyimpan nama logger
@@ -1055,7 +1080,7 @@ class IntentManager:
     
     def fetch_data_range(self):
         print("fetch_logger_by_date ini telah berjalan")
-
+        model_name = "llama3.1:8b"
         prompt = self.memory.latest_prompt
         print("prompt", prompt)
 
@@ -1105,6 +1130,35 @@ class IntentManager:
             matched_parameters=matched_parameters,
             logger_list=logger_list
         )
+        #  Oper ke LLM
+        summaries = []
+        if isinstance(fetched_data, list):
+            # Kalau original_fetch_data_range kamu return list (data mentah)
+            first_data = fetched_data[0] if fetched_data else None
+            if first_data and isinstance(first_data, dict):
+                    nama_lokasi = first_data.get("logger_name")
+            user_prompt = (
+                f"Berikut adalah semua parameter yang tersedia:\n\n"
+                f"{fetched_data}\n\n"
+                "Berikan kesimpulan dalam satu paragraf pendek dari data logger berikut. \n"
+                "Analisis tren parameter yang tersedia (jika terlihat), sebutkan nilai tertinggi dan terendah, dan jelaskan apakah nilainya termasuk kategori rendah, sedang, atau tinggi berdasarkan konteks umum. \n"
+                "Cukup tampilkan semua data dalam urutan seperti yang diberikan.\n"
+                f"Awali dengan judul: **Data Monitoring Telemetri {nama_lokasi}**\n"
+                "Tambahkan garis pemisah '=====' di bawah judul."
+            )
+            messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "Anda adalah asisten telemetri pintar.\n"
+                        "Tugas Anda adalah memberikan satu ringkasan berdasarkan data logger yang tersedia.\n"
+                        "Ringkasan harus objektif, dan relevan — hindari penjelasan berlebihan."
+                    )
+                },
+                {"role": "user", "content": user_prompt}
+            ]
+            response = chat(model=model_name, messages=messages, options={"num_predict": 1024})
+            summaries.append(response["message"]["content"])
 
         # === Simpan ke memory jika berhasil (list of summaries)
         if isinstance(fetched_data, str) and "Tidak ditemukan" in fetched_data:
@@ -1126,7 +1180,7 @@ class IntentManager:
             # Jika kamu return string (ringkasan markdown), tetap bisa tampilkan
             print("Ringkasan string (markdown):", fetched_data)
 
-        return fetched_data
+        return "\n\n---\n\n".join(summaries)
 
 
     # def fetch_data_range(self):
@@ -1280,17 +1334,17 @@ class IntentManager:
         matched_parameters = [selected_param]  # list parameter untuk filter
 
         # Gunakan original_fetch_data_range untuk fetch data dengan deteksi waktu di prompt
-        fetched_summary = original_fetch_data_range(
+        fetched_data = original_fetch_data_range(
             prompt=prompt,
             target_loggers=name_fragments,
             matched_parameters=matched_parameters,
             logger_list=logger_list
         )
 
-        if "Tanggal tidak dikenali" in fetched_summary:
+        if "Tanggal tidak dikenali" in fetched_data:
             return "Mohon sertakan rentang tanggal yang jelas pada permintaan Anda."
 
-        if "Tidak ditemukan data" in fetched_summary:
+        if "Tidak ditemukan data" in fetched_data:
             return "Tidak ditemukan data yang cocok untuk logger yang disebutkan."
 
         # Karena original_fetch_data_range mengembalikan string summary,
@@ -1306,7 +1360,7 @@ class IntentManager:
             model='llama3.1:8b',
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"{self.memory.latest_prompt}\n\nBerikut data yang tersedia:\n{fetched_summary}"}
+                {"role": "user", "content": f"{self.memory.latest_prompt}\n\nBerikut data yang tersedia:\n{fetched_data}"}
             ]
         )
 
