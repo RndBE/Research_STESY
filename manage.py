@@ -1100,7 +1100,6 @@ class IntentManager:
     def compare_across_loggers(self):
         print("compare_across_loggers ini telah berjalan")
 
-        # print(f"intent adalah {self.intent}")
         prompt = self.memory.latest_prompt.lower()
         print(f"compare_across_loggers prompt {prompt}")
         logger_list = fetch_list_logger()
@@ -1144,44 +1143,43 @@ class IntentManager:
                 "Silakan sebutkan seperti suhu udara, kelembaban udara, tekanan udara, atau curah hujan."
             )
 
-        # Ambil data logger dengan filtered matched_parameters [selected_param]
+        # Tentukan nama lokasi logger
         name_fragments = [logger["nama_lokasi"] for logger in logger_list]
-        matched_parameters = [selected_param]  # harus dalam list untuk filter
-        fetched = find_and_fetch_latest_data(name_fragments, matched_parameters, logger_list)
+        matched_parameters = [selected_param]  # list parameter untuk filter
 
-        if not fetched:
-            return "Tidak ditemukan data terbaru untuk logger yang disebutkan." 
+        # Gunakan original_fetch_data_range untuk fetch data dengan deteksi waktu di prompt
+        fetched_summary = original_fetch_data_range(
+            prompt=prompt,
+            target_loggers=name_fragments,
+            matched_parameters=matched_parameters,
+            logger_list=logger_list
+        )
 
-        # Siapkan data untuk konteks
-        comparison_data = []
-        for item in fetched:
-            logger_name = item["logger_name"]
-            value = item["data"].get(selected_param, "Data tidak tersedia")
-            comparison_data.append(f"{logger_name}: {value}")
+        if "Tanggal tidak dikenali" in fetched_summary:
+            return "Mohon sertakan rentang tanggal yang jelas pada permintaan Anda."
 
-        # Prompt sistem untuk kasus normal dan ekstrem + sensor
+        if "Tidak ditemukan data" in fetched_summary:
+            return "Tidak ditemukan data yang cocok untuk logger yang disebutkan."
+
+        # Karena original_fetch_data_range mengembalikan string summary,
+        # kita langsung gunakan untuk konteks chat
         system_prompt = (
             "Kamu adalah asisten cerdas yang menjawab pertanyaan berdasarkan data logger cuaca. "
             "Jika pengguna menanyakan yang berkaitan dengan kondisi ekstrem seperti 'terdingin', 'paling panas', 'terbasah', 'paling', 'tertinggi', atau 'terendah', "
             "berikan jawaban hanya untuk satu pos dengan nilai ekstrem tersebut beserta nama pos dan nilai parameternya. "
             "Untuk permintaan lain, berikan jawaban yang jelas dan sesuai dengan semua data pos yang relevan. "
-            "Catatan penting: Sistem hanya dapat menampilkan data untuk hari ini, data terbaru, atau dalam rentang 24 jam terakhir. "
-            "Data untuk waktu tertentu seperti 'kemarin', 'minggu lalu', atau rentang waktu spesifik tidak tersedia dan tidak dapat ditampilkan."
         )
-
-        context_data = "\n".join(comparison_data)
-
-        print("context_data :",context_data)
 
         response = chat(
             model='llama3.1:8b',
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"{self.memory.latest_prompt}\n\nBerikut data yang tersedia:\n{context_data}"}
+                {"role": "user", "content": f"{self.memory.latest_prompt}\n\nBerikut data yang tersedia:\n{fetched_summary}"}
             ]
         )
 
         return response['message']['content']
+
 
     def show_selected_parameter(self):
         print("show_selected_parameter ini telah berjalan")
