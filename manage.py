@@ -517,9 +517,16 @@ class PromptProcessedMemory:
         # Gunakan LLM untuk menyusun prompt eksplisit berdasarkan chat history
         combined_text, is_direct_answer = self.resolve_ambiguous_prompt_with_llm(user_messages, model_name=model_name)
 
+        # Cek apakah direct answer LLM hanya mengulang isi sebelumnya
         if is_direct_answer:
-            print("\n✅ Ini adalah jawaban langsung dari LLM, tidak perlu intent.")
-            return self.handle_direct_answer(combined_text)
+            print("\n✅ Ini adalah jawaban langsung dari LLM.")
+            # Periksa jika isi direct_answer ini mirip dengan salah satu message sebelumnya
+            previous_responses = [msg["content"] for msg in user_messages if msg["role"] == "assistant"]
+            if any(combined_text.strip() == resp.strip() for resp in previous_responses):
+                print("⚠️ Jawaban direct_answer sama dengan chat sebelumnya. Gunakan prompt terakhir untuk intent.")
+                self.latest_prompt = new_prompt
+            else:
+                return self.handle_direct_answer(combined_text)
 
         # 🔁 Jika hasil resolve adalah prompt asli user (karena [NO ANSWER]), kembalikan new_prompt, bukan hasil LLM
         if combined_text.strip() == new_prompt.strip():
