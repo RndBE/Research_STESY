@@ -57,65 +57,103 @@ def general_stesy(messages, model_name="llama3.1:8b"):
     response = chat(model=model_name, messages=[system_prompt] + messages)
     return response["message"]["content"]
 
-
 def original_fetch_status_logger(prompt: str):
     print("fetch_status_rain ini telah berjalan")
-    url = "https://dpupesdm.monitoring4system.com/api/get_rain"
-    prompt = prompt.lower() #  update GIT
+
+    prompt = prompt.lower()
+
+    kabupaten_map = {
+        "sleman": "Sleman",
+        "bantul": "Bantul",
+        "kulonprogo": "Kulon Progo",
+        "kulon progo": "Kulon Progo",
+        "gunungkidul": "Gunung Kidul",
+        "gunung kidul": "Gunung Kidul",
+    }
+
+    kabupaten_in_prompt = None
+    for k_raw, k_clean in kabupaten_map.items():
+        if k_raw in prompt:
+            kabupaten_in_prompt = k_clean
+            break
+
+    try:
+        logger_resp = requests.get("https://dpupesdm.monitoring4system.com/api/list_logger", timeout=10)
+        logger_resp.raise_for_status()
+        logger_list = logger_resp.json()
+    except requests.RequestException as e:
+        return f"Terjadi kesalahan saat mengakses API: {str(e)}"
+
+    lokasi_to_kab = {
+        row.get("nama_lokasi"): row.get("kabupaten")
+        for row in logger_list if row.get("nama_lokasi") and row.get("kabupaten")
+    }
+
+    try:
+        response = requests.get("https://dpupesdm.monitoring4system.com/api/get_rain", timeout=10)
+        response.raise_for_status()
+        data = response.json()
+    except requests.RequestException as e:
+        return f"Terjadi kesalahan saat mengakses API: {str(e)}"
 
     regex_map = {
         "tidak_hujan": r"(tidak\s+hujan|belum\s+(turun\s+)?hujan|masih\s+terang)",
         "hujan_lebat": r"(hujan\s+(lebat|deras|sangat\s+lebat))",
         "tidak_hujan_lebat": r"(tidak\s+hujan\s+lebat|bukan\s+hujan\s+lebat)",
         "sering_hujan": r"sering\s+hujan",
-        "tidak_cerah": r"(tidak\s+cerah|berawan|mendung)"
+        "tidak_cerah": r"(tidak\s+cerah|berawan|mendung)",
+        "cerah": r"\b(cerah|cuaca\s+baik|terang)\b"
     }
 
-    try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        data = response.json()
+    pos_tidak_hujan = []
+    pos_hujan = []
+    pos_lebat = []
+    pos_tidak_lebat = []
 
-        pos_tidak_hujan = []
-        pos_hujan = []
-        pos_lebat = []
-        pos_tidak_lebat = []
+    for entry in data:
+        nama = entry.get("nama_lokasi", "")
+        ch = entry.get("curah_hujan", "")
+        status = entry.get("status", "").strip().lower()
+        kab = lokasi_to_kab.get(nama)
 
-        for entry in data:
-            nama = entry.get("nama_lokasi", "")
-            ch = entry.get("curah_hujan", "")
-            status = entry.get("status", "").strip().lower()
-            line = f"- {nama} ({ch}, {status})"
+        if kabupaten_in_prompt and kab != kabupaten_in_prompt:
+            continue
 
-            if status == "tidak hujan":
-                pos_tidak_hujan.append(line)
+        line = f"- {nama} ({ch}, {status})"
+
+        if status == "tidak hujan":
+            pos_tidak_hujan.append(line)
+        else:
+            pos_hujan.append(line)
+            if "lebat" in status:
+                pos_lebat.append(line)
             else:
-                pos_hujan.append(line)
-                if "lebat" in status:
-                    pos_lebat.append(line)
-                else:
-                    pos_tidak_lebat.append(line)
+                pos_tidak_lebat.append(line)
 
-        if re.search(regex_map["tidak_hujan_lebat"], prompt):
-            combined = pos_tidak_lebat + pos_tidak_hujan
-            return "Berikut logger yang tidak hujan lebat:\n" + "\n".join(combined) if combined else "Semua pos mencatat hujan lebat saat ini."
+    if re.search(regex_map["tidak_hujan_lebat"], prompt):
+        combined = pos_tidak_lebat + pos_tidak_hujan
+        return f"Berikut logger di {kabupaten_in_prompt or 'semua kabupaten'} yang tidak hujan lebat:\n" + "\n".join(combined) if combined else "Semua pos mencatat hujan lebat saat ini."
 
-        if re.search(regex_map["tidak_hujan"], prompt):
-            return "Berikut logger yang tidak hujan:\n" + "\n".join(pos_tidak_hujan) if pos_tidak_hujan else "Semua pos mencatat hujan saat ini."
+    if re.search(regex_map["tidak_hujan"], prompt):
+        return f"Berikut logger di {kabupaten_in_prompt or 'semua kabupaten'} yang tidak hujan:\n" + "\n".join(pos_tidak_hujan) if pos_tidak_hujan else "Semua pos mencatat hujan saat ini."
 
-        if re.search(regex_map["hujan_lebat"], prompt):
-            return "Berikut logger dengan hujan lebat:\n" + "\n".join(pos_lebat) if pos_lebat else "Tidak ada pos dengan hujan lebat saat ini."
+    if re.search(regex_map["hujan_lebat"], prompt):
+        return f"Berikut logger di {kabupaten_in_prompt or 'semua kabupaten'} dengan hujan lebat:\n" + "\n".join(pos_lebat) if pos_lebat else "Tidak ada pos dengan hujan lebat saat ini."
 
-        if re.search(regex_map["tidak_cerah"], prompt):
-            return "Berikut logger yang sedang hujan:\n" + "\n".join(pos_hujan) if pos_hujan else "Semua pos tampak cerah saat ini."
+    if re.search(regex_map["tidak_cerah"], prompt):
+        return f"Berikut logger di {kabupaten_in_prompt or 'semua kabupaten'} yang sedang hujan:\n" + "\n".join(pos_hujan) if pos_hujan else "Semua pos tampak cerah saat ini."
 
-        if re.search(regex_map["sering_hujan"], prompt):
-            return "Maaf, data intensitas hujan historis tidak tersedia saat ini."
+    if re.search(regex_map["cerah"], prompt):
+        if pos_tidak_hujan:
+            return f"Ya, terdapat pos dengan cuaca cerah (tidak hujan) di {kabupaten_in_prompt or 'semua kabupaten'}:\n" + "\n".join(pos_tidak_hujan)
+        else:
+            return "Saat ini tidak ada pos yang mencatat cuaca cerah."
 
-        return "Berikut logger yang sedang hujan:\n" + "\n".join(pos_hujan) if pos_hujan else "Tidak ada logger yang mencatat hujan saat ini."
+    if re.search(regex_map["sering_hujan"], prompt):
+        return "Maaf, data intensitas hujan historis tidak tersedia saat ini."
 
-    except requests.RequestException as e:
-        return f"Terjadi kesalahan saat mengakses API: {str(e)}"
+    return f"Berikut logger di {kabupaten_in_prompt or 'semua kabupaten'} yang sedang hujan:\n" + "\n".join(pos_hujan) if pos_hujan else "Tidak ada logger yang mencatat hujan saat ini."
+
 
 def original_fetch_data_range(prompt: str, target_loggers: list, matched_parameters: list, logger_list: list):
     print("prompt :", prompt)
@@ -852,13 +890,24 @@ def fetch_list_logger_from_prompt_flexibleV1(user_prompt: str):
 
     # Daftar kabupaten yang didukung
     kabupaten_list = ['Sleman', 'Bantul', 'Kulon Progo', 'Gunung Kidul']
-
+    # gunungkidul, kulonprogo
     def extract_kabupaten(prompt: str) -> str:
-        prompt = prompt.lower()
-        for kab in kabupaten_list:
-            if kab.lower() in prompt:
-                return kab
+        prompt = prompt.lower().replace(" ", "")
+        
+        # Kamus mapping ejaan longgar ke format baku
+        kabupaten_map = {
+            "sleman": "Sleman",
+            "bantul": "Bantul",
+            "gunungkidul": "Gunung Kidul",
+            "gunungkidul": "Gunung Kidul",  # tambahan jaga-jaga
+            "kulonprogo": "Kulon Progo",
+        }
+
+        for raw_kab, standard_kab in kabupaten_map.items():
+            if raw_kab in prompt:
+                return standard_kab
         return None
+
 
     kabupaten = extract_kabupaten(user_prompt)
 
@@ -876,23 +925,19 @@ def fetch_list_logger_from_prompt_flexibleV1(user_prompt: str):
     filtered_loggers = []
     for row in loggers:
         filtered_loggers.append({
-            "id_logger": row.get("id_logger"),
             "nama_lokasi": row.get("nama_lokasi"),
-            "latitude": row.get("latitude"),
-            "longitude": row.get("longitude"),
             "alamat": row.get("alamat"),
-            "kabupaten": row.get("kabupaten"),
-            "koneksi": row.get("koneksi")
+            "kabupaten": row.get("kabupaten"), # nama lokasi harus dalam bentuk Kulon Progo dan Gunung Kidul
         })
 
     df = pd.DataFrame(filtered_loggers)
-
+    print(f"Panjang DataFrame di Kabupaten {kabupaten} adalah {len(df)}")
     if kabupaten:
         df = df[df['kabupaten'].str.lower() == kabupaten.lower()]
         print(f"Filter berdasarkan kabupaten: {kabupaten}")
     else:
         print("Tidak ada kabupaten disebutkan, tampilkan semua logger.")
-
+    print(f"DataFrame {kabupaten} : {df}")
     result_list = df.to_dict(orient='records')
 
     # === Ringkasan otomatis ===
@@ -901,14 +946,13 @@ def fetch_list_logger_from_prompt_flexibleV1(user_prompt: str):
 
         if not result_list:
             return "⚠️ Tidak ditemukan logger untuk permintaan Anda."
-
+        
         markdown_list = ""
         for i, log in enumerate(result_list, start=1):
             markdown_list += (
                 f"\n### {i}. {log['nama_lokasi']}\n"
                 f"* **Alamat**: {log['alamat']}\n"
                 f"* **Kabupaten**: {log['kabupaten']}\n"
-                f"* **Status Koneksi**: {log['koneksi']}\n"
             )
 
         user_msg = (
