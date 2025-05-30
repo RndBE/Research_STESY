@@ -64,6 +64,10 @@ def chat_endpoint():
         print("1. latest_user_msg", latest_user_msg)
         print("2. intent_info", intent_info)
 
+        # ✅ Step 3: Simpan ke history memory
+        print("[DEBUG] Akan memanggil _save_user_memory...")
+        memory._save_user_memory()
+
         # ❓ Tawarkan konfirmasi jika logger tidak dikenali
         if (not target or target == []) and logger_suggestions:
             suggestions_text = []
