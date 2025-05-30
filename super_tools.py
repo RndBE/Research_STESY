@@ -61,7 +61,7 @@ def general_stesy(messages, model_name="llama3.1:8b"):
 def original_fetch_status_logger(prompt: str):
     print("fetch_status_rain ini telah berjalan")
     url = "https://dpupesdm.monitoring4system.com/api/get_rain"
-    prompt = prompt.lower()
+    prompt = prompt.lower() #  update GIT
 
     regex_map = {
         "tidak_hujan": r"(tidak\s+hujan|belum\s+(turun\s+)?hujan|masih\s+terang)",

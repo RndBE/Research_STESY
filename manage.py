@@ -560,7 +560,7 @@ class PromptProcessedMemory:
         self.latest_prompt = new_prompt
         self.prompt_history.append(new_prompt)
         self.last_date = None
-
+            
         try:
             self.intent = self._predict_intent_bert(new_prompt)
         except Exception as e:

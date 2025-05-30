@@ -66,7 +66,7 @@ def chat_endpoint():
 
         # ✅ Step 3: Simpan ke history memory
         print("[DEBUG] Akan memanggil _save_user_memory...")
-        memory._save_user_memory()
+        memory._save_user_memory() #  update GIT
 
         # ❓ Tawarkan konfirmasi jika logger tidak dikenali
         if (not target or target == []) and logger_suggestions:
