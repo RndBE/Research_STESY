@@ -11,6 +11,7 @@ from super_tools import sensor_aliases
 from difflib import get_close_matches
 from flask import Flask, request, jsonify
 from typing import List, Dict, Tuple
+from nltk.tokenize import word_tokenize
 
 MEMORY_DIR = "user_memory"
 
@@ -274,12 +275,12 @@ class PromptProcessedMemory:
         print(f"Latest Prompt : {self.latest_prompt}")
 
         try:
+            print("Try code condition is working .....")
             logger_data = fetch_list_logger()
             logger_names_from_db = [normalize_logger_name(lg["nama_lokasi"]) for lg in logger_data if "nama_lokasi" in lg]
             normalized_valid_loggers = set(logger_names_from_db)
+            # print(f"normalized_valid_loggers : {normalized_valid_loggers}")
             print(f"✅ {len(normalized_valid_loggers)} logger valid dimuat.")
-
-            # Hitung kemunculan nama lokasi yang sama tanpa prefix
             from collections import Counter
             stripped_names = [name.replace("pos ", "").strip() for name in logger_names_from_db]
             normalized_counter = Counter(stripped_names)
@@ -294,6 +295,19 @@ class PromptProcessedMemory:
 
         expanded_matches = self._clean_logger_list(raw_matches)
         print("🧩 expanded_matches:", expanded_matches)
+        print("TIPE expanded_matches:", type(expanded_matches))
+
+        # Token overlap, kecuali untuk 'kali bawang' dan 'sapon'
+        if any(keyword in self.latest_prompt.lower() for keyword in ["kali bawang", "sapon"]):
+            print("⚠️ Deteksi kata eksplisit 'kali bawang' atau 'sapon' dalam prompt — token overlap dilewati")
+        else:
+            tokens = set(self.latest_prompt.lower().split())
+            for logger in logger_names_from_db:
+                lokasi_tokens = set(logger.replace("pos ", "").lower().split())
+                if lokasi_tokens & tokens:
+                    print(f"🧠 Token overlap: {lokasi_tokens & tokens} cocok dengan '{logger}'")
+                    expanded_matches.append(logger)
+                    break
 
         stopwords = {
             "kemarin", "kemaren", "hari", "ini", "lalu", "terakhir",
@@ -313,12 +327,13 @@ class PromptProcessedMemory:
             else:
                 stripped_norm = norm.replace("pos ", "").strip()
                 if stripped_norm in {"sapon", "kali bawang"}:
-                    n_suggestions = 2
+                    suggestions = [l for l in normalized_valid_loggers if stripped_norm in l]
+                    print(f"⚠️ Logger ambigu '{stripped_norm}' — Saran eksplisit: {suggestions}")
                 else:
                     n_suggestions = min(normalized_counter.get(stripped_norm, 2), 3)
+                    suggestions = get_close_matches(norm, normalized_valid_loggers, n=n_suggestions, cutoff=0.7)
+                    print("Jumlah suggestions:", n_suggestions)
 
-                print("Jumlah suggestions:", n_suggestions)
-                suggestions = get_close_matches(norm, normalized_valid_loggers, n=n_suggestions, cutoff=0.7)
                 if suggestions:
                     self.logger_suggestions[norm] = suggestions
                 print(f"⚠️ Tidak valid: {norm} — Saran: {suggestions}")
@@ -331,6 +346,7 @@ class PromptProcessedMemory:
         else:
             print(f"🚫 Tidak ada logger valid ditemukan — mempertahankan last_logger sebelumnya. Yaitu {self.last_logger_list}")
             self.last_logger_list = self.last_logger_list or []
+
 
         date_keywords = [
             "hari ini", "kemarin", "kemaren", "minggu ini", "minggu lalu", "bulan lalu",
@@ -1025,6 +1041,9 @@ class IntentManager:
 
         print(f"Dari Prompt {prompt} Intent adalah : {intent}, target logger adalah : {target_loggers}")
         print("Data Sebelumnya :", self.memory.last_data)
+
+        if target_loggers == [None]:
+            return "Maaf nama lokasi tidak diketahui, Silahkan memberikan nama lokasi logger"
 
         if not target_loggers or not logger_list:
             return "Target logger atau daftar logger tidak tersedia."
