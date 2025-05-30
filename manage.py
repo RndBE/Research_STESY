@@ -1461,6 +1461,42 @@ class IntentManager:
         name_fragments = [logger["nama_lokasi"] for logger in logger_list]
         matched_parameters = [selected_param]  # list parameter untuk filter
 
+        # Deteksi rentang tanggal
+        date_info = extract_date_structured(prompt)
+        print("Extracted date_info:", date_info)
+
+        # Jika tidak ada tanggal, ambil data terkini dari logger
+        if not date_info.get("awal_tanggal") or not date_info.get("akhir_tanggal"):
+            fetched = find_and_fetch_latest_data(
+                name_list=name_fragments,
+                matched_parameters=matched_parameters,
+                logger_list=logger_list
+            )
+
+            summaries = []
+            for item in fetched:
+                logger_name = item['logger_name']
+                for param in matched_parameters:
+                    value = item['data'].get(param, "Data tidak tersedia")
+                    summaries.append(f"{logger_name}: {param} = {value}")
+
+            # Gabungkan jadi konteks untuk LLaMA
+            context_data = "\n".join(summaries)
+
+            system_prompt = (
+                "Kamu adalah asisten cerdas yang menjawab pertanyaan berdasarkan data logger. "
+                "Berikan jawaban yang jelas dan sesuai dengan permintaan pengguna seperti nama pos dan parameter yang diminta."
+            )
+
+            response = chat(
+                model='llama3.1:8b',
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"{self.memory.latest_prompt}\n\nBerikut data yang tersedia:\n{context_data}"}
+                ]
+            )
+            return response['message']['content']
+
         # Gunakan original_fetch_data_range untuk fetch data dengan deteksi waktu di prompt
         fetched_data = original_fetch_data_range(
             prompt=prompt,
@@ -1468,12 +1504,6 @@ class IntentManager:
             matched_parameters=matched_parameters,
             logger_list=logger_list
         )
-
-        if "Tanggal tidak dikenali" in fetched_data:
-            return "Mohon sertakan rentang tanggal yang jelas pada permintaan Anda."
-
-        if "Tidak ditemukan data" in fetched_data:
-            return "Tidak ditemukan data yang cocok untuk logger yang disebutkan."
 
         # Karena original_fetch_data_range mengembalikan string summary,
         # kita langsung gunakan untuk konteks chat
