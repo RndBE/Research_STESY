@@ -1575,7 +1575,6 @@ class IntentManager:
 
         return response['message']['content']
 
-
     def show_selected_parameter(self):
         print("show_selected_parameter ini telah berjalan")
         prompt = self.memory.latest_prompt.lower()
