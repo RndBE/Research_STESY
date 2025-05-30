@@ -580,8 +580,8 @@ class PromptProcessedMemory:
         # Hanya update prev_intent jika intent sebelumnya valid
         print(f"\n Intent baru {self.intent} dan intent lama adalah {self.prev_intent}")
         print(f"Intent Sebelumnya {self.prev_intent}, target sebelumnya {self.prev_target}, waktu sebelumnya {self.prev_date}")
-        
-        if self.intent not in ["ai_limitation", "unknown_intent"]:
+
+        if self.intent not in ["ai_limitation", "unknown_intent"]: # Update
             self.prev_intent = self.intent
 
         # 2. Predict intent
