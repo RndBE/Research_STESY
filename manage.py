@@ -111,7 +111,7 @@ class PromptProcessedMemory:
             now = datetime.now()
             response = self.response_history[-1] if self.response_history else ""
             prompt = self.latest_prompt or ""
-            
+            print("response di _save_user_memory :",response)
             data_entry = {
                 "user_id": self.user_id,
                 "date": now.strftime("%Y-%m-%d"),
@@ -470,10 +470,6 @@ class PromptProcessedMemory:
 
 
     def update_last_logger_list_from_response(self, response_text: str):
-        """
-        Update last_logger_list berdasarkan teks hasil response yang mengandung
-        daftar logger dengan format "- Pos <NAMA LOGGER>"
-        """
         import re
         matches = re.findall(r"- (Pos [A-Z]{3} [\w\s]+)", response_text)
         if matches:
@@ -560,17 +556,16 @@ class PromptProcessedMemory:
         # if is_direct_answer:
         #     print("\n✅ Ini adalah jawaban langsung dari LLM, tidak perlu intent.")
         #     return self.handle_direct_answer(combined_text)  # Fungsi penanganan langsung
-
         # Jika bukan jawaban langsung → proses seperti biasa
+        # try:
+        #     self.intent = self._predict_intent_bert(new_prompt)
+        # except Exception as e:
+        #     print(f"[INTENT PREDICTION ERROR] {e}")
+        #     self.intent = "unknown_intent"
+
         self.latest_prompt = new_prompt
         self.prompt_history.append(new_prompt)
         self.last_date = None
-            
-        try:
-            self.intent = self._predict_intent_bert(new_prompt)
-        except Exception as e:
-            print(f"[INTENT PREDICTION ERROR] {e}")
-            self.intent = "unknown_intent"
 
         print("\nnew_prompt di function process_new_prompt", new_prompt)
         print(f"\nIntent di function procces_new_prompt adalah : {self.intent}")
@@ -588,6 +583,14 @@ class PromptProcessedMemory:
 
         if self.intent not in ["ai_limitation", "unknown_intent"]: # Update
             self.prev_intent = self.intent
+
+        if self.last_logger:
+            self.prev_logger = self.last_logger
+            print(f"Nama pos sebelumnya adalah : {self.prev_logger}")
+
+        if self.last_date:
+            self.prev_date = self.last_date
+            print(f"Tanggal sebelumnya adalah : {self.prev_date}")
 
         # 2. Predict intent
         try:
@@ -1014,18 +1017,33 @@ class IntentManager:
     def fetch_latest_data(self):
         print("intent show_logger_data ini telah berjalan")
         model_name = "llama3.1:8b"
+        print("Intent Sebelumnya :", self.memory.prev_intent)
         prompt = self.memory.latest_prompt.lower()
         intent = self.memory.intent
         target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
         logger_list = fetch_list_logger()
 
         print(f"Dari Prompt {prompt} Intent adalah : {intent}, target logger adalah : {target_loggers}")
+        print("Data Sebelumnya :", self.memory.last_data)
+
         if not target_loggers or not logger_list:
             return "Target logger atau daftar logger tidak tersedia."
-        if self.memory.last_data != None :
-            print("Data yang disimpan", self.memory.last_data)
-        if self.memory.last_data == None :
-            print("Tidak Menyimpan data")
+        
+        # 🔍 Cek apakah ada summary sebelumnya dari LLM di history
+        def _find_last_logger_response(messages):
+            for msg in reversed(messages):
+                if msg["role"] == "assistant" and "Data Monitoring Telemetri" in msg["content"]:
+                    return msg["content"]
+            return None
+
+        # if self.memory.last_data != None :
+        #     print("Data yang disimpan", self.memory.last_data)
+        # if self.memory.last_data == None :
+        #     print("Tidak Menyimpan data")
+        # Ambil user_messages dari request
+        payload = request.get_json(force=True)
+        user_messages = payload.get("messages", [])
+
         # === Deteksi parameter yang diminta dari prompt
         matched_parameters = []
         for param, aliases in sensor_aliases.items():
@@ -1033,9 +1051,41 @@ class IntentManager:
                 if alias in prompt:
                     matched_parameters.append(param)
                     break
-        
         print("Matched Parameters:", matched_parameters)
+        # 🔁 Cek apakah prompt saat ini hanya ingin parameter tertentu dari summary sebelumnya
+        latest_summary = _find_last_logger_response(user_messages)
+        if latest_summary and matched_parameters:
+            print("✅ Menggunakan summary sebelumnya untuk menjawab permintaan parameter tertentu.")
 
+            extracted_lines = []
+            for param in matched_parameters:
+                pattern = rf"\|\s*{param}\s*\|\s*([^|]+)\s*\|"
+                import re
+                match = re.search(pattern, latest_summary, re.IGNORECASE)
+                if match:
+                    extracted_lines.append(f"**{param}:** {match.group(1).strip()}")
+                else:
+                    extracted_lines.append(f"**{param}:** Tidak ditemukan dalam ringkasan sebelumnya.")
+
+            extracted_text = "\n".join(extracted_lines)
+
+            user_prompt = (
+                "Berikut ini adalah nilai hasil ekstraksi parameter dari ringkasan data logger sebelumnya:\n\n"
+                f"{extracted_text}\n\n"
+                "Tolong berikan interpretasi atau penjelasan singkat untuk masing-masing parameter. "
+                "Gunakan format seperti: *Nilai [parameter] [angka dan satuan] menunjukkan bahwa ...*. "
+                "Jelaskan dalam konteks umum, apakah nilainya rendah, sedang, atau tinggi, dan bagaimana kondisi tersebut dapat dipahami oleh orang awam. "
+                "Jawaban Anda cukup dalam **satu kalimat saja per parameter**."
+            )
+            messages = [
+                {"role": "system", "content": "Anda adalah asisten telemetri pintar. "
+                "Jawaban Anda **harus hanya berdasarkan informasi eksplisit yang diberikan**. "
+                "Jika data tidak tersedia, katakan dengan sopan — jangan buat asumsi atau menebak-nebak."
+            },
+                {"role": "user", "content": user_prompt}
+            ]
+            response = chat(model=model_name, messages=messages)
+            return response["message"]["content"]
         # === Fetch data terbaru
         fetched = find_and_fetch_latest_data(target_loggers, matched_parameters, logger_list)
 
@@ -1104,6 +1154,7 @@ class IntentManager:
                 ]
                 response = chat(model=model_name, messages=messages, options={"num_predict": 1024})
                 summaries.append(response["message"]["content"])
+            
 
                 # Ada data parameter, buat ringkasan normal
                 # summary = summarize_logger_data(nama_lokasi, data)
