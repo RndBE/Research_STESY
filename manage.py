@@ -298,65 +298,79 @@ class PromptProcessedMemory:
         print("TIPE expanded_matches:", type(expanded_matches))
 
         # Token overlap, kecuali untuk 'kali bawang' dan 'sapon'
-        if any(keyword in self.latest_prompt.lower() for keyword in ["kali bawang", "sapon"]):
+        if any(keyword in expanded_matches.lower() for keyword in ["kali bawang", "sapon"]):
             print("⚠️ Deteksi kata eksplisit 'kali bawang' atau 'sapon' dalam prompt — token overlap dilewati")
         else:
-            tokens = set(self.latest_prompt.lower().split())
+            # Stopwords teknis untuk nama lokasi
+            technical_tokens = {
+                "pos", "logger", "data",
+                "afmr", "awlr", "awr", "arr", "adr", "awqr", "avwr", "awgc"
+            }
+
+            tokens = set(
+                word for word in self.latest_prompt.lower().split()
+                if word not in technical_tokens and len(word) > 2
+            )
+            print("🧠 Token bersih dari prompt:", tokens)
+
             for logger in logger_names_from_db:
-                lokasi_tokens = set(logger.replace("pos ", "").lower().split())
+                lokasi_tokens = set(
+                    word for word in logger.replace("pos ", "").lower().split()
+                    if word not in technical_tokens and len(word) > 2
+                )
                 if lokasi_tokens & tokens:
                     print(f"🧠 Token overlap: {lokasi_tokens & tokens} cocok dengan '{logger}'")
                     expanded_matches.append(logger)
                     break
 
-        stopwords = {
-            "kemarin", "kemaren", "hari", "ini", "lalu", "terakhir",
-            "minggu", "bulan", "tahun", "tanggal", "besok", "selama", "depan"
-        }
+                stopwords = {
+                    "kemarin", "kemaren", "hari", "ini", "lalu", "terakhir",
+                    "minggu", "bulan", "tahun", "tanggal", "besok", "selama", "depan"
+                }
 
-        cleaned_matches = set()
-        self.logger_suggestions = {}
+                cleaned_matches = set()
+                self.logger_suggestions = {}
 
-        for match in expanded_matches:
-            filtered = " ".join(word for word in match.split() if word.lower() not in stopwords)
-            norm = normalize_logger_name(filtered)
-            print("filtered:", filtered, "→ norm:", norm)
+                for match in expanded_matches:
+                    filtered = " ".join(word for word in match.split() if word.lower() not in stopwords)
+                    norm = normalize_logger_name(filtered)
+                    print("filtered:", filtered, "→ norm:", norm)
 
-            if norm in normalized_valid_loggers:
-                cleaned_matches.add(norm)
-            else:
-                stripped_norm = norm.replace("pos ", "").strip()
-                if stripped_norm in {"sapon", "kali bawang"}:
-                    suggestions = [l for l in normalized_valid_loggers if stripped_norm in l]
-                    print(f"⚠️ Logger ambigu '{stripped_norm}' — Saran eksplisit: {suggestions}")
+                    if norm in normalized_valid_loggers:
+                        cleaned_matches.add(norm)
+                    else:
+                        stripped_norm = norm.replace("pos ", "").strip()
+                        if stripped_norm in {"sapon", "kali bawang"}:
+                            suggestions = [l for l in normalized_valid_loggers if stripped_norm in l]
+                            print(f"⚠️ Logger ambigu '{stripped_norm}' — Saran eksplisit: {suggestions}")
+                        else:
+                            n_suggestions = min(normalized_counter.get(stripped_norm, 2), 3)
+                            suggestions = get_close_matches(norm, normalized_valid_loggers, n=n_suggestions, cutoff=0.7)
+                            print("Jumlah suggestions:", n_suggestions)
+
+                        if suggestions:
+                            self.logger_suggestions[norm] = suggestions
+                        print(f"⚠️ Tidak valid: {norm} — Saran: {suggestions}")
+
+                if cleaned_matches:
+                    self.last_logger_list = list(cleaned_matches)
+                    self.last_logger = self.last_logger_list[-1]
+                    print("📌 last_logger_list:", self.last_logger_list)
+                    print("📌 last_logger (terakhir):", self.last_logger)
                 else:
-                    n_suggestions = min(normalized_counter.get(stripped_norm, 2), 3)
-                    suggestions = get_close_matches(norm, normalized_valid_loggers, n=n_suggestions, cutoff=0.7)
-                    print("Jumlah suggestions:", n_suggestions)
-
-                if suggestions:
-                    self.logger_suggestions[norm] = suggestions
-                print(f"⚠️ Tidak valid: {norm} — Saran: {suggestions}")
-
-        if cleaned_matches:
-            self.last_logger_list = list(cleaned_matches)
-            self.last_logger = self.last_logger_list[-1]
-            print("📌 last_logger_list:", self.last_logger_list)
-            print("📌 last_logger (terakhir):", self.last_logger)
-        else:
-            print(f"🚫 Tidak ada logger valid ditemukan — mempertahankan last_logger sebelumnya. Yaitu {self.last_logger_list}")
-            self.last_logger_list = self.last_logger_list or []
+                    print(f"🚫 Tidak ada logger valid ditemukan — mempertahankan last_logger sebelumnya. Yaitu {self.last_logger_list}")
+                    self.last_logger_list = self.last_logger_list or []
 
 
-        date_keywords = [
-            "hari ini", "kemarin", "kemaren", "minggu ini", "minggu lalu", "bulan lalu",
-            "awal bulan", "akhir bulan", "tahun lalu", "minggu terakhir", "bulan terakhir", "hari terakhir"
-        ]
-        for phrase in date_keywords:
-            if phrase in combined_text:
-                self.last_date = phrase
-                print("🗓️ Deteksi tanggal (keyword):", phrase)
-                break
+                date_keywords = [
+                    "hari ini", "kemarin", "kemaren", "minggu ini", "minggu lalu", "bulan lalu",
+                    "awal bulan", "akhir bulan", "tahun lalu", "minggu terakhir", "bulan terakhir", "hari terakhir"
+                ]
+                for phrase in date_keywords:
+                    if phrase in combined_text:
+                        self.last_date = phrase
+                        print("🗓️ Deteksi tanggal (keyword):", phrase)
+                        break
 
         relative_date_patterns = [
             r"\d+\s+hari\s+(lalu|terakhir)",
@@ -1284,7 +1298,6 @@ class IntentManager:
         model_name = "llama3.1:8b"
         prompt = self.memory.latest_prompt
         print("prompt", prompt)
-
         target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
         print("target_loggers", target_loggers)
 
@@ -1309,6 +1322,9 @@ class IntentManager:
         # === Ekstraksi tanggal dari prompt
         date_info = extract_date_structured(prompt)
         print("date_info", date_info)
+        if date_info.get("awal_tanggal") == [None]:
+            print("Mohon maaf, tanggal yang Anda masukkan belum dapat dikenali. Silakan berikan tanggal secara lengkap dengan format tahun-bulan-tanggal")
+        
 
         # Simpan tanggal ke memory
         if date_info.get("awal_tanggal") or date_info.get("akhir_tanggal"):
