@@ -298,10 +298,11 @@ class PromptProcessedMemory:
         print("TIPE expanded_matches:", type(expanded_matches))
 
         # Token overlap, kecuali untuk 'kali bawang' dan 'sapon'
-        if any(keyword in self.latest_prompt.lower() for keyword in ["kali bawang", "sapon"]):
+        if any(keyword in expanded_matches for keyword in ["kali bawang", "sapon"]):
+            print("expanded Matches dalam if", expanded_matches)
             print("⚠️ Deteksi kata eksplisit 'kali bawang' atau 'sapon' dalam prompt — token overlap dilewati")
         else:
-            tokens = set(self.latest_prompt.lower().split())
+            tokens = set(expanded_matches)
             for logger in logger_names_from_db:
                 lokasi_tokens = set(logger.replace("pos ", "").lower().split())
                 if lokasi_tokens & tokens:
@@ -1309,7 +1310,9 @@ class IntentManager:
         # === Ekstraksi tanggal dari prompt
         date_info = extract_date_structured(prompt)
         print("date_info", date_info)
-
+        if date_info.get("awal_tanggal") == [None]:
+            print("Mohon maaf, tanggal yang Anda masukkan belum dapat dikenali. Silakan berikan tanggal secara lengkap dengan format tahun-bulan-tanggal")
+        
         # Simpan tanggal ke memory
         if date_info.get("awal_tanggal") or date_info.get("akhir_tanggal"):
             self.memory.last_date = f"{date_info.get('awal_tanggal')} s/d {date_info.get('akhir_tanggal')}"

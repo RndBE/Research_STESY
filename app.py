@@ -72,14 +72,18 @@ def chat_endpoint():
         if (not target or target == []) and logger_suggestions:
             suggestions_text = []
             for invalid_logger, candidates in logger_suggestions.items():
-                if candidates:
-                    # suggestions_text.append(
-                    #     f"Nama logger '{invalid_logger}' tidak dikenali. Apakah maksud Anda: " +
-                    #     ", ".join(f"'{c}'" for c in candidates) + "?"
-                    # )
-                    suggestions_text.append( # kami mendeteksi ada 
-                        f"Kami mendeteksi ada '{len(candidates)}' logger dengan nama yang sama. Apakah pos yang anda maksud adalah " +
-                        ", ".join(f"'{c}'" for c in candidates) + "?"
+                if candidates and len(candidates) == 2:
+                    # Format kandidat: kapitalisasi awal setiap kata + AWLR/ARR kapital penuh
+                    def format_logger_name(name):
+                        words = name.lower().split()
+                        return ' '.join(w.upper() if w in {"awlr", "arr", "awr", "avwr"} else w.capitalize() for w in words)
+
+                    c1 = format_logger_name(candidates[0])
+                    c2 = format_logger_name(candidates[1])
+                    # invalid = format_logger_name(invalid_logger)
+
+                    suggestions_text.append(
+                        f"Kami mendeteksi ada 2 logger dengan nama mirip {invalid_logger}. Pos manakah yang Anda maksud: {c1} atau {c2}?"
                     )
             return jsonify({
                 "model": model_name,
