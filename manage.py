@@ -62,6 +62,9 @@ class PromptProcessedMemory:
         self.prev_intent: Optional[str] = None
         self.prev_target: Optional[str] = None
         self.prev_date: Optional[str] = None
+        
+        # ✅ Tambahkan ini untuk memperbaiki error
+        # self.logger_suggestions: List[str] = []
 
         # self.logger_list = logger_list  # ✅ Perubahan: Simpan logger_list sebagai atribut
 
@@ -251,7 +254,7 @@ class PromptProcessedMemory:
         print(f"latest User Messages is : {user_reply}")
         print(f"Previous Messages is : {prev_msg}")
 
-        if user_reply in CONFIRM_YES_SYNONYMS and "anda maksud adalah" in prev_msg:
+        if user_reply in CONFIRM_YES_SYNONYMS and "manakah yang Anda maksud" in prev_msg:
             # Ambil logger dari kalimat seperti: "Apakah maksud Anda: 'pos arr kemput'?"
             match = re.findall(r"'(pos [^']+)'", previous_assistant_message)
             print("match :", match)
@@ -299,22 +302,23 @@ class PromptProcessedMemory:
         print("TIPE expanded_matches:", type(expanded_matches))
     
         # Token overlap, kecuali untuk 'kali bawang' dan 'sapon'
-        if any(keyword in self.latest_prompt.lower() for keyword in ["kali bawang", "sapon"]):
+        if any(keyword in expanded_matches for keyword in ["kali bawang", "sapon"]):
             print("⚠️ Deteksi kata eksplisit 'kali bawang' atau 'sapon' dalam prompt — token overlap dilewati")
         else:
+            print("Else Berjalan.....")
             # Stopwords teknis untuk nama lokasi
             technical_tokens = {
-                "pos", "logger", "data",
-                "afmr", "awlr", "awr", "arr", "adr", "awqr", "avwr", "awgc"
+                "pos", "logger", "data","afmr", "awlr", "awr", "arr", "adr", "awqr", "avwr", "awgc"
             }
 
             tokens = set(
                 word for word in self.latest_prompt.lower().split()
                 if word not in technical_tokens and len(word) > 2
             )
-            print("🧠 Token bersih dari prompt:", tokens)
+            print("🧠 Token bersih dari prompt:", tokens, expanded_matches)
 
             for logger in logger_names_from_db:
+                print("For loop berjalan")
                 lokasi_tokens = set(
                     word for word in logger.replace("pos ", "").lower().split()
                     if word not in technical_tokens and len(word) > 2
@@ -328,7 +332,7 @@ class PromptProcessedMemory:
                     "kemarin", "kemaren", "hari", "ini", "lalu", "terakhir",
                     "minggu", "bulan", "tahun", "tanggal", "besok", "selama", "depan"
                 }
-
+                print("expanded_matches :",logger)
                 cleaned_matches = set()
                 self.logger_suggestions = {}
 
@@ -352,7 +356,7 @@ class PromptProcessedMemory:
                         if suggestions:
                             self.logger_suggestions[norm] = suggestions
                         print(f"⚠️ Tidak valid: {norm} — Saran: {suggestions}")
-
+            
                 if cleaned_matches:
                     self.last_logger_list = list(cleaned_matches)
                     self.last_logger = self.last_logger_list[-1]
@@ -372,7 +376,7 @@ class PromptProcessedMemory:
                         self.last_date = phrase
                         print("🗓️ Deteksi tanggal (keyword):", phrase)
                         break
-
+            
         relative_date_patterns = [
             r"\d+\s+hari\s+(lalu|terakhir)",
             r"\d+\s+minggu\s+(lalu|terakhir)",
@@ -581,9 +585,9 @@ class PromptProcessedMemory:
         print("\nLAST PROMPT", new_prompt)
 
         # Gunakan LLM untuk menyusun prompt eksplisit berdasarkan chat history
-        combined_text, is_direct_answer = self.resolve_ambiguous_prompt_with_llm(user_messages, model_name=model_name)
-        print("combined_text", combined_text)
-        print("is_direct_answer", is_direct_answer)
+        # combined_text, is_direct_answer = self.resolve_ambiguous_prompt_with_llm(user_messages, model_name=model_name)
+        # print("combined_text", combined_text)
+        # print("is_direct_answer", is_direct_answer)
         # if is_direct_answer:
         #     print("\n✅ Ini adalah jawaban langsung dari LLM, tidak perlu intent.")
         #     return self.handle_direct_answer(combined_text)  # Fungsi penanganan langsung
@@ -654,9 +658,9 @@ class PromptProcessedMemory:
                 target = self.last_logger
 
         # 4. Finalize
+        print(f"self.logger_suggestions adalah, {self.logger_suggestions}")
         self.intent = effective_intent
         print(f"[FINAL] Intent yang digunakan: {self.intent}, Target: {target}, Date: {self.last_date}")
-
         # # Langkah 1: Daftar intent ambigu
         # ambiguous_intents = ["ai_limitation", "unknown_intent"]
 
@@ -1853,22 +1857,28 @@ class IntentManager:
                 "role": "system",
                 "content": (
                     "Anda adalah AI virtual assistant untuk Smart Telemetry Systems (STESY).\n"
-                    "Tugas Anda adalah menjawab pertanyaan pengguna secara langsung dan JANGAN menolak menjawab jika informasi telah disediakan.\n\n"
-                    "Jawaban harus menggunakan data yang diberikan dari sistem, dan tidak boleh mengarang atau menolak menjawab jika data sudah tersedia."
+                    "Tugas Anda adalah menjawab pertanyaan pengguna secara langsung berdasarkan informasi yang tersedia dari sistem.\n"
+                    "Jika data ditemukan, berikan jawaban yang tepat dan singkat.\n"
+                    "Jika data **tidak tersedia**, berikan jawaban maaf yang sopan tanpa mengarang atau menebak.\n"
+                    "JANGAN mengatakan 'saya tidak tahu' jika data tersedia, dan JANGAN mengarang jika data tidak tersedia."
                 )
             },
             {
                 "role": "user",
                 "content": (
                     f"Pertanyaan pengguna: {prompt}\n\n"
-                    f"Berikut informasi dari sistem STESY:\n{get_info}\n\n"
-                    f"Silakan berikan jawaban langsung dan ringkas berdasarkan informasi di atas."
+                    f"Berikut informasi yang tersedia dari sistem:\n\n{get_info}\n\n"
+                    "Jika informasi yang diminta tidak ditemukan dalam data di atas, jawab dengan:\n"
+                    f"\"Maaf, saya tidak menemukan informasi mengenai '{prompt}' dalam data yang diberikan.\"\n\n"
+                    "Jika informasi tersedia, berikan jawaban langsung berdasarkan data tersebut."
                 )
             }
         ]
-    
+
         response = chat(model=model_name, messages=messages_llm)
+        print("response adalah ",response)
         final_content = response["message"]["content"]
+        print("final_content adalah ",final_content)
         # 
         return final_content # "Menjalankan function show_logger_info"
 

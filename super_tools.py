@@ -902,7 +902,7 @@ def search_logger_info(prompt: str):
         return "❌ Tidak bisa mengambil data logger saat ini."
 
     prompt = prompt.lower()
-    
+
     # Tentukan jenis informasi yang diminta
     if "sensor" in prompt:
         info_type = "sensor"
@@ -913,12 +913,12 @@ def search_logger_info(prompt: str):
     else:
         info_type = "full"
 
-    # 🔍 Ekstrak kemungkinan nama lokasi dari prompt
+    # Ekstrak kemungkinan nama lokasi dari prompt
     logger_pattern = r"\b(?:logger|pos|afmr|awlr|awr|arr|adr|awqr|avwr|awgc)\s+(?:[a-z]{3,}(?:\s+[a-z]{3,}){0,3})"
     match = re.search(logger_pattern, prompt)
     location_text = match.group(0) if match else prompt  # fallback ke seluruh prompt
 
-    # Fuzzy match ke nama_lokasi dari API
+    # Fuzzy match ke nama_lokasi
     pos_list = df['nama_lokasi'].dropna().str.lower().tolist()
     best_match = difflib.get_close_matches(location_text, pos_list, n=1, cutoff=0.3)
 
@@ -926,20 +926,28 @@ def search_logger_info(prompt: str):
         return "🕵️‍♂️ Maaf, saya tidak menemukan pos yang relevan dengan permintaan Anda."
 
     pos_data = df[df['nama_lokasi'].str.lower() == best_match[0]].iloc[0]
+    lokasi = pos_data['nama_lokasi']
 
+    # Ambil masing-masing data dan validasi isinya
+    nama_penjaga = str(pos_data.get('nama_penjaga', '')).strip()
+    no_hp = str(pos_data.get('no_penjaga', '')).strip()
+    sensor = str(pos_data.get('sensor', '')).strip()
+
+    # Buat respon berdasarkan jenis info
     if info_type == "sensor":
-        return f"Jenis sensor di {pos_data['nama_lokasi']}: {pos_data.get('sensor', 'Tidak diketahui')}"
+        return f"Jenis sensor di {lokasi}: {sensor if sensor else 'Data sensor belum tersedia.'}"
     elif info_type == "hp":
-        return f"Nomor HP penjaga di {pos_data['nama_lokasi']}: {pos_data.get('no_penjaga', 'Tidak tersedia')}"
+        return f"Nomor HP penjaga di {lokasi}: {no_hp if no_hp else 'Nomor HP belum tercatat dalam sistem.'}"
     elif info_type == "penjaga":
-        return f"Nama penjaga di {pos_data['nama_lokasi']}: {pos_data.get('nama_penjaga', 'Tidak tersedia')}"
+        return f"Nama penjaga di {lokasi}: {nama_penjaga if nama_penjaga else 'Nama penjaga belum tersedia.'}"
     else:
         return (
-            f"{pos_data['nama_lokasi']}\n"
-            f"Penjaga: {pos_data.get('nama_penjaga', 'Tidak tersedia')}\n"
-            f"Sensor: {pos_data.get('sensor', 'Tidak diketahui')}\n"
-            f"No HP: {pos_data.get('no_penjaga', 'Tidak tersedia')}"
+            f"{lokasi}\n"
+            f"Penjaga: {nama_penjaga if nama_penjaga else 'Belum tersedia'}\n"
+            f"Sensor: {sensor if sensor else 'Belum tersedia'}\n"
+            f"No HP: {no_hp if no_hp else 'Belum tersedia'}"
         )
+
 
 def fetch_list_logger_from_prompt_flexibleV1(user_prompt: str):
     print("fetch_list_logger_from_prompt_flexibleV1 telah berjalan")
