@@ -79,7 +79,7 @@ def chat_endpoint():
                     # )
                     suggestions_text.append( # kami mendeteksi ada 
                         f"Kami mendeteksi ada '{len(candidates)}' logger dengan nama yang sama. Apakah pos yang anda maksud adalah " +
-                        ", ".join(f"'{c}'" for c in candidates) + "?"
+                        ", ".join(f"{c}" for c in candidates) + "?"
                     )
             return jsonify({
                 "model": model_name,

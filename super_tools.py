@@ -885,6 +885,62 @@ def find_closest_logger(name_fragment, logger_list, threshold=40, max_candidates
         return None
 
 
+def get_logger_info(): 
+    url = "https://dpupesdm.monitoring4system.com/api/list_logger"
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        return pd.DataFrame(data)
+    except requests.RequestException as e:
+        print(f"❌ Gagal mengambil data dari API: {e}")
+        return None
+import difflib
+def search_logger_info(prompt: str):
+    df = get_logger_info()
+    if df is None:
+        return "❌ Tidak bisa mengambil data logger saat ini."
+
+    prompt = prompt.lower()
+    
+    # Tentukan jenis informasi yang diminta
+    if "sensor" in prompt:
+        info_type = "sensor"
+    elif "hp" in prompt or "nomor" in prompt or "no hp" in prompt:
+        info_type = "hp"
+    elif "penjaga" in prompt or "siapa" in prompt or "jaga" in prompt:
+        info_type = "penjaga"
+    else:
+        info_type = "full"
+
+    # 🔍 Ekstrak kemungkinan nama lokasi dari prompt
+    logger_pattern = r"\b(?:logger|pos|afmr|awlr|awr|arr|adr|awqr|avwr|awgc)\s+(?:[a-z]{3,}(?:\s+[a-z]{3,}){0,3})"
+    match = re.search(logger_pattern, prompt)
+    location_text = match.group(0) if match else prompt  # fallback ke seluruh prompt
+
+    # Fuzzy match ke nama_lokasi dari API
+    pos_list = df['nama_lokasi'].dropna().str.lower().tolist()
+    best_match = difflib.get_close_matches(location_text, pos_list, n=1, cutoff=0.3)
+
+    if not best_match:
+        return "🕵️‍♂️ Maaf, saya tidak menemukan pos yang relevan dengan permintaan Anda."
+
+    pos_data = df[df['nama_lokasi'].str.lower() == best_match[0]].iloc[0]
+
+    if info_type == "sensor":
+        return f"Jenis sensor di {pos_data['nama_lokasi']}: {pos_data.get('sensor', 'Tidak diketahui')}"
+    elif info_type == "hp":
+        return f"Nomor HP penjaga di {pos_data['nama_lokasi']}: {pos_data.get('no_penjaga', 'Tidak tersedia')}"
+    elif info_type == "penjaga":
+        return f"Nama penjaga di {pos_data['nama_lokasi']}: {pos_data.get('nama_penjaga', 'Tidak tersedia')}"
+    else:
+        return (
+            f"{pos_data['nama_lokasi']}\n"
+            f"Penjaga: {pos_data.get('nama_penjaga', 'Tidak tersedia')}\n"
+            f"Sensor: {pos_data.get('sensor', 'Tidak diketahui')}\n"
+            f"No HP: {pos_data.get('no_penjaga', 'Tidak tersedia')}"
+        )
+
 def fetch_list_logger_from_prompt_flexibleV1(user_prompt: str):
     print("fetch_list_logger_from_prompt_flexibleV1 telah berjalan")
 

@@ -1,13 +1,14 @@
 import os
 import json
 import re
+import difflib
 from ollama import chat # modif 2
 from typing import List, Dict, Optional
 from datetime import datetime, timedelta
 from transformers import BertTokenizer, BertForSequenceClassification
 import torch
 import joblib
-from super_tools import sensor_aliases
+from super_tools import sensor_aliases,get_logger_info, search_logger_info
 from difflib import get_close_matches
 from flask import Flask, request, jsonify
 from typing import List, Dict, Tuple
@@ -296,9 +297,9 @@ class PromptProcessedMemory:
         expanded_matches = self._clean_logger_list(raw_matches)
         print("🧩 expanded_matches:", expanded_matches)
         print("TIPE expanded_matches:", type(expanded_matches))
-
+    
         # Token overlap, kecuali untuk 'kali bawang' dan 'sapon'
-        if any(keyword in expanded_matches.lower() for keyword in ["kali bawang", "sapon"]):
+        if any(keyword in self.latest_prompt.lower() for keyword in ["kali bawang", "sapon"]):
             print("⚠️ Deteksi kata eksplisit 'kali bawang' atau 'sapon' dalam prompt — token overlap dilewati")
         else:
             # Stopwords teknis untuk nama lokasi
@@ -1008,6 +1009,7 @@ class IntentManager:
             "analyze_logger_by_date": self.analyze_by_date, # safe id_logger, date_info, fetched data(before llm)
             "ai_limitation": self.ai_limitation, # safe id_logger, date_info, fetched data(before llm)
             "show_online_logger" : self.connection_status, # safe id_logger, date_info, fetched data(before llm)
+            "show_logger_info": self.show_logger_info,
             "direct_answer": self.direct_answer
         }
     # def handle_intent(self):
@@ -1301,12 +1303,22 @@ class IntentManager:
         target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
         print("target_loggers", target_loggers)
 
+        def generate_return_response(user_prompt: str, fallback_message: str) -> str:
+            # Ambil struktur: judul, bullet list, dan format markdown dari user_prompt
+            # Gantikan kontennya dengan fallback_message namun tetap menjaga format
+
+            lines = user_prompt.strip().splitlines()
+            header_line = next((line for line in lines if "**" in line), "**Informasi Telemetri**")
+            separator_line = "=====" if any("=====" in line for line in lines) else ""
+
+            # Gabungkan dalam struktur yang sama
+            response = f"{header_line}\n{separator_line}\n\n{fallback_message}"
+            return response
+
+
         # ✅ Filter None dari list
         target_loggers = [t for t in target_loggers if t is not None]
-
-        # ❗Jika tidak ada target valid, berikan pesan penjelasan
-        if not target_loggers:
-            return (
+        return_response = (
                 "Maaf sistem tidak menemukan pos logger aktif dalam memori.\n\n"
                 "Hal ini bisa terjadi karena:\n"
                 "1. Anda belum menyebutkan nama pos secara eksplisit\n"
@@ -1316,6 +1328,11 @@ class IntentManager:
                 "- `berikan data pos arr ngawen kemarin`\n"
                 "- `tampilkan data pos awlr bunder 2 hari terakhir`"
             )
+        # ❗Jika tidak ada target valid, berikan pesan penjelasan
+        if not target_loggers:
+            # Gunakan user_prompt sebagai template format
+            formatted_response = generate_return_response(user_prompt, return_response)
+            return formatted_response
 
         logger_list = fetch_list_logger()
 
@@ -1823,6 +1840,37 @@ class IntentManager:
         final_content = response["message"]["content"]
 
         return final_content
+    def show_logger_info(self):
+        print("Function show_logger_info langsung dijalankan")
+        prompt  = self.memory.latest_prompt
+        model_name = "llama3.1:8b"
+        print("prompt", prompt)
+        get_info = search_logger_info(prompt)
+        print("get_info :", get_info)
+
+        messages_llm = [
+            {
+                "role": "system",
+                "content": (
+                    "Anda adalah AI virtual assistant untuk Smart Telemetry Systems (STESY).\n"
+                    "Tugas Anda adalah menjawab pertanyaan pengguna secara langsung dan JANGAN menolak menjawab jika informasi telah disediakan.\n\n"
+                    "Jawaban harus menggunakan data yang diberikan dari sistem, dan tidak boleh mengarang atau menolak menjawab jika data sudah tersedia."
+                )
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Pertanyaan pengguna: {prompt}\n\n"
+                    f"Berikut informasi dari sistem STESY:\n{get_info}\n\n"
+                    f"Silakan berikan jawaban langsung dan ringkas berdasarkan informasi di atas."
+                )
+            }
+        ]
+    
+        response = chat(model=model_name, messages=messages_llm)
+        final_content = response["message"]["content"]
+        # 
+        return final_content # "Menjalankan function show_logger_info"
 
     def direct_answer(self):
         print("✅ Handler untuk jawaban langsung dijalankan")
