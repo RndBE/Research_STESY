@@ -309,6 +309,24 @@ class PromptProcessedMemory:
     #     #         #  return {"prompt":"self.latest_prompt","confirmed": True, "logger": selected_logger} ubah ke return seperti ini
  
     #     # return None
+    def validate_logger_clarification(self, clarification):
+        if not isinstance(clarification, list) or len(clarification) < 2:
+            return None
+
+        ignore_tokens = {"pos", "arr", "awlr", "awr", "adr", "awqr", "avwr", "awgc"}
+
+        def get_location_key(name):
+            tokens = [t for t in name.lower().split() if t not in ignore_tokens]
+            return " ".join(tokens[-2:]) if tokens else ""
+
+        base_key = get_location_key(clarification[0])
+        if not base_key:
+            return None
+
+        if all(get_location_key(name) == base_key for name in clarification[1:]):
+            return clarification
+        return None
+
     
     def handle_confirmation_prompt_if_needed(self, user_reply: str) -> Optional[dict]:
         print("func handle_confirmation_prompt_if_needed sedang berjalan....")
@@ -325,10 +343,16 @@ class PromptProcessedMemory:
         # Coba ambil klarifikasi langsung
         clarification = self.last_logger_clarification
 
+        # ✅ Pasang disini
+        clarification = self.validate_logger_clarification(clarification)
+
+        if clarification:
+            print(f"✅ Klarifikasi valid ditemukan: {clarification}")
+            self.last_logger_clarification = clarification
+
         # Jika tidak ada klarifikasi tersimpan, coba ekstrak dari response_history
         if not clarification:
             print("⚠️ last_logger_clarification kosong — mencoba ekstraksi dari response_history...")
-            import re
 
             # Pola untuk mendeteksi 'pos {tipe} {lokasi}'
             pattern = r"(pos\s+[a-z]+(?:\s+[a-z]+){0,2})"
@@ -2404,5 +2428,57 @@ class IntentManager:
         return self.memory.analysis_result or "✅ Jawaban telah diberikan langsung oleh sistem."
 
     def fallback_response(self):
-        print("Fallback intent dijalankan")
-        return "Intent tidak dikenali"
+        print("⚠️ fallback_response dijalankan karena intent tidak dikenali.")
+        prompt = self.memory.latest_prompt
+        model_name = "llama3.1:8b"
+        
+        only_logger = self.last_logger and not self.last_date
+        only_date = self.last_date and not self.last_logger
+
+        rekomendasi_khusus = ""
+        if only_logger:
+            rekomendasi_khusus = (
+                f"🛰️ Sistem hanya mengenali lokasi logger: **{self.last_logger}**.\n"
+                "Coba tambahkan periode waktu atau parameter yang ingin ditampilkan, seperti:\n"
+                "- `Tampilkan suhu udara di {self.last_logger} kemarin`\n"
+                "- `Berikan ringkasan kelembaban di {self.last_logger} selama seminggu terakhir`\n\n"
+            )
+        elif only_date:
+            rekomendasi_khusus = (
+                f"🕒 Sistem hanya mengenali tanggal: **{self.last_date}**.\n"
+                "Coba tambahkan nama pos logger untuk memperjelas, seperti:\n"
+                "- `Tampilkan data logger ARR Sapon tanggal {self.last_date}`\n"
+                "- `Bagaimana tekanan udara di AWLR Wates pada {self.last_date}`\n\n"
+            )
+
+        contoh_prompt_umum = (
+            "Berikut contoh pertanyaan yang dapat dikenali sistem:\n"
+            "1. Bagaimana ringkasan kelembaban dari ARR Gemawang selama minggu lalu?\n"
+            "2. Tampilkan data terbaru dari ARR Gemawang.\n"
+            "3. Di mana tingkat cahaya paling rendah tercatat?\n"
+        )
+
+        intro = "🙏 Maaf, sistem belum dapat memahami maksud Anda sepenuhnya.\n\n"
+        
+        messages_llm = [
+            {
+                "role": "system",
+                "content": (
+                    "Anda adalah STESY, asisten virtual Smart Telemetry System.\n"
+                    "Jika pengguna memberikan prompt ambigu atau tidak lengkap (misal hanya tanggal atau hanya lokasi), berikan:\n"
+                    "- Peringatan bahwa informasi belum cukup.\n"
+                    "- Saran melengkapi prompt.\n"
+                    "- Contoh pertanyaan yang valid.\n"
+                    "Formatkan dengan sopan dan rapi."
+                )
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+
+        response = chat(model=model_name, messages=messages_llm)
+        final_reply = intro + rekomendasi_khusus + contoh_prompt_umum + "\n\n" + response["message"]["content"]
+        return final_reply
+
