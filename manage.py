@@ -417,8 +417,6 @@ class PromptProcessedMemory:
         print("⚠️ Tidak dikenali sebagai klarifikasi.")
         return None
 
-
-
     def confirm_logger_from_previous_suggestion(self, previous_assistant_message: str, user_reply: str) -> Optional[str]:
         """
         Jika user menjawab 'ya' dan assistant sebelumnya memberi saran logger,
@@ -2348,39 +2346,71 @@ class IntentManager:
             return "Prompt tidak mengandung kata kunci koneksi seperti aktif, offline, signal, dll."
 
     def ai_limitation(self):
-        print("ai_limitation telah berjalan untuk merespon di luar cakupan")
-        prompt = self.memory.latest_prompt
-        print(f"Latest ai_limitation prompt {prompt}")
+        print("func ai_limitation telah berjalan untuk merespon di luar cakupan")
         model_name = "llama3.1:8b"
-        print("Intent deteksi limitation berjalan")
 
-        messages_llm = [
-            {
-                "role": "system",
-                "content": (
-                    "Anda adalah AI virtual assistant Smart Telemetry Systems (STESY) yang hanya menjawab pertanyaan dalam konteks khusus berikut:.\n"
-                    "- Telemetri\n"
-                    "- Hidrologi\n"
-                    "- Sungai\n"
-                    "- Cuaca\n"
-                    "- Klimatologi\n"
-                    "- Analisis data logger\n\n"
-                    "jika pertanyaan user "
-                    "Jika pertanyaan user sesuai konteks di atas, berikan jawaban secara informatif, jelas, dan dalam format markdown jika relevan.\n\n"
-                    "Namun jika pertanyaan user berada di luar topik (misalnya tentang sejarah, teknologi umum, hiburan, atau tidak ada hubungannya dengan sistem telemetri), "
-                    "**tolak dengan sopan boleh tambahkan emoticon**:\n"
-                )
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
+        # Ambil prompt terakhir dari user
+        prompt = self.memory.latest_prompt
+        print(f"Latest prompt: {prompt}")
 
+        # 🔍 Jika tidak ada target maupun tanggal → arahkan user dengan bantuan LLM
+        if not self.memory.last_logger and not self.memory.last_date:
+            print("⚠️ Tidak ditemukan nama logger maupun tanggal — arahkan user dengan contoh pertanyaan.")
+
+            messages_llm = [
+                {
+                    "role": "system",
+                    "content": (
+                        f"Anda adalah STESY, AI assistant untuk Smart Telemetry Systems.\n"
+                        f"Jika pengguna tidak menyebutkan nama pos maupun tanggal, bantu arahkan dengan sopan.\n"
+                        f"Berikan contoh pertanyaan, gunakan markdown dan emoji jika perlu."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Pengguna hanya memberikan permintaan umum seperti 'tampilkan datanya', 'saya ingin lihat info', tanpa nama pos atau tanggal.\n\n"
+                        f"Berikut adalah contoh pertanyaan yang sesuai:\n"
+                        f"1. Tampilkan suhu udara di Pos ARR Gemawang kemarin.\n"
+                        f"2. Bagaimana kondisi kelembaban di AWLR Kaliurang minggu lalu?\n"
+                        f"3. Di mana pos dengan curah hujan tertinggi hari ini?"
+                    )
+                }
+            ]
+
+            response = chat(model=model_name, messages=messages_llm)
+            return response["message"]["content"]
+
+        # Jika target atau tanggal ada, tetap gunakan konteks dari chat history
+        full_history = self.memory.get_context_window(window_size=4)
+        print(f"📜 Chat history untuk ai_limitation: {full_history}")
+
+        messages_llm = [{
+            "role": "system",
+            "content": (
+                "Anda adalah STESY, AI virtual assistant untuk Smart Telemetry Systems.\n"
+                "Anda hanya menjawab pertanyaan tentang:\n"
+                "- Telemetri\n- Hidrologi\n- Sungai\n- Cuaca\n- Klimatologi\n- Analisis data logger\n\n"
+                "Jika pertanyaan tidak relevan atau ambigu, jawab dengan sopan dan arahkan pengguna.\n"
+                "Jika pengguna hanya mengucapkan 'ok', 'terima kasih', atau 'iya', cukup balas ringkas dan ramah."
+            )
+        }]
+
+        # Tambahkan history user + asisten (jika ada)
+        for msg in full_history:
+            messages_llm.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
+
+        # Tambahkan prompt terbaru jika belum ada
+        if not any(m["content"] == prompt for m in messages_llm if m["role"] == "user"):
+            messages_llm.append({"role": "user", "content": prompt})
+
+        # Kirim ke LLaMA
         response = chat(model=model_name, messages=messages_llm)
-        final_content = response["message"]["content"]
+        return response["message"]["content"]
 
-        return final_content
     def show_logger_info(self):
         print("Function show_logger_info langsung dijalankan")
         prompt  = self.memory.latest_prompt
@@ -2431,24 +2461,26 @@ class IntentManager:
         print("⚠️ fallback_response dijalankan karena intent tidak dikenali.")
         prompt = self.memory.latest_prompt
         model_name = "llama3.1:8b"
-        
-        only_logger = self.last_logger and not self.last_date
-        only_date = self.last_date and not self.last_logger
+
+        only_logger = self.memory.last_logger and not self.memory.last_date # .memory.
+        only_date = self.memory.last_date and not self.memory.last_logger
 
         rekomendasi_khusus = ""
+        clean_logger = self.memory.last_logger.strip().title() if self.memory.last_logger else "pos yang Anda maksud"
+
         if only_logger:
             rekomendasi_khusus = (
-                f"🛰️ Sistem hanya mengenali lokasi logger: **{self.last_logger}**.\n"
+                f"🛰️ Sistem hanya mengenali lokasi logger: **{clean_logger}**.\n"
                 "Coba tambahkan periode waktu atau parameter yang ingin ditampilkan, seperti:\n"
-                "- `Tampilkan suhu udara di {self.last_logger} kemarin`\n"
-                "- `Berikan ringkasan kelembaban di {self.last_logger} selama seminggu terakhir`\n\n"
+                f"- `Tampilkan suhu udara di {clean_logger} kemarin`\n"
+                f"- `Berikan ringkasan kelembaban di {clean_logger} selama seminggu terakhir`\n\n"
             )
         elif only_date:
             rekomendasi_khusus = (
-                f"🕒 Sistem hanya mengenali tanggal: **{self.last_date}**.\n"
+                f"🕒 Sistem hanya mengenali tanggal: **{self.memory.last_date}**.\n"
                 "Coba tambahkan nama pos logger untuk memperjelas, seperti:\n"
-                "- `Tampilkan data logger ARR Sapon tanggal {self.last_date}`\n"
-                "- `Bagaimana tekanan udara di AWLR Wates pada {self.last_date}`\n\n"
+                f"- `Tampilkan data logger ARR Sapon tanggal {self.memory.last_date}`\n"
+                f"- `Bagaimana tekanan udara di AWLR Wates pada {self.memory.last_date}`\n\n"
             )
 
         contoh_prompt_umum = (
@@ -2459,17 +2491,14 @@ class IntentManager:
         )
 
         intro = "🙏 Maaf, sistem belum dapat memahami maksud Anda sepenuhnya.\n\n"
-        
+
         messages_llm = [
             {
                 "role": "system",
                 "content": (
-                    "Anda adalah STESY, asisten virtual Smart Telemetry System.\n"
-                    "Jika pengguna memberikan prompt ambigu atau tidak lengkap (misal hanya tanggal atau hanya lokasi), berikan:\n"
-                    "- Peringatan bahwa informasi belum cukup.\n"
-                    "- Saran melengkapi prompt.\n"
-                    "- Contoh pertanyaan yang valid.\n"
-                    "Formatkan dengan sopan dan rapi."
+                    "Anda adalah STESY, AI virtual assistant untuk Smart Telemetry System.\n"
+                    "Jika pengguna tidak memberikan input lengkap, bantu berikan arahan dengan sopan dan jelas.\n"
+                    "Formatkan respons secara ramah dan mudah dimengerti."
                 )
             },
             {
@@ -2481,4 +2510,3 @@ class IntentManager:
         response = chat(model=model_name, messages=messages_llm)
         final_reply = intro + rekomendasi_khusus + contoh_prompt_umum + "\n\n" + response["message"]["content"]
         return final_reply
-
