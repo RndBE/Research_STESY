@@ -408,13 +408,17 @@ class PromptProcessedMemory:
             if len(candidates) > 2:
                 print(f"Panjang dari kandidat adalah {len(candidates)}")
                 candidates = self.normalize_logger_list_from_history(candidates)
-
-                clarification = {
-                    "ambiguous_input": "logger sebelumnya",
-                    "candidates": candidates
-                }
+                if candidates == None:
+                    print("❌ Tidak ditemukan kandidat logger dari response_history.")
+                    return None
+                else: 
+                    clarification = {
+                        "ambiguous_input": "logger sebelumnya",
+                        "candidates": candidates
+                    }
                 self.last_logger_clarification = clarification
                 print("✅ Klarifikasi berhasil diambil dari response_history:", clarification)
+                # ✅ Klarifikasi berhasil diambil dari response_history: {'ambiguous_input': 'logger sebelumnya', 'candidates': None}
             else:
                 print("❌ [GAGAL] Merubah kandidat logger dari response_history.")
                 return None
