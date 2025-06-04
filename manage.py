@@ -47,6 +47,7 @@ class PromptProcessedMemory:
         self.response_history: List[str] = []
         self.latest_prompt: Optional[str] = None
 
+        self.last_logger_clarification = None  # ✅ Diperlukan
         self.last_logger: Optional[str] = None
         self.last_logger_list: List[str] = []
         self.last_logger_id: Optional[str] = None
@@ -64,7 +65,7 @@ class PromptProcessedMemory:
         self.prev_date: Optional[str] = None
         
         # ✅ Tambahkan ini untuk memperbaiki error
-        # self.logger_suggestions: List[str] = []
+        self.logger_suggestions: List[str] = []
 
         # self.logger_list = logger_list  # ✅ Perubahan: Simpan logger_list sebagai atribut
 
@@ -82,6 +83,30 @@ class PromptProcessedMemory:
         self._split_prompt_response()
         self._extract_context_memory()
 
+    CONFIRM_YES_SYNONYMS = {
+            # Karakter ekspresif/random
+            "?", "??", "???", "????", "!", "!!", "!!!", "!!!!", "!!!!!", "...", "....", "......","ya",
+            # Variasi dasar & pertanyaan
+            "ya", "iya", "iya?", "iya!", "iya?!", "betul", "betul?", "benar", "benar?", "bener", "bener?",
+            "betool", "betool?", "betool!!", "betool!", "benerrr", "benerrrr!","boleh","yaa","yaaa","yaaaa",
+            # Variasi informal dan slang
+            "yoi", "yap", "y", "yo", "sip", "ok", "oke", "okey", "yes", "yess", "yesss", "you bet", "yosh", "yoa", "yoi",
+            # Tambahan penekanan/emosi
+            "ya dong", "iya deh", "iya banget", "iya lah", "iyalah", "iyalah sayang", "iyaa", "iyaa dong", "iyaa!", "iyap", 
+            "yes dong", "yes lah", "yes banget", "yes yes!",
+            # Kata penegasan atau afirmatif
+            "udah pasti", "jelas", "jelas banget", "pastinya", "tentu", "tentu saja", "pasti", "pastilah", "bener banget",
+            # Chat slang/kasual + ekspresi acak
+            "gas", "cus", "gass", "gasss", "gaskeun", "mantap", "mantul", "sip deh", "sippp", "sippp!", "sipppp", "siap", "siap!", 
+            "go!", "ayoo!", "ayok", "hayuk", "lanjut", "langsung aja", "okedeh", "ok sip", "ok gas", "langsung gas",
+            # Emoji & kombinasi
+            "ya 👍", "oke 👍", "sip 👍", "yoi 💪", "yes ✅", "betul ✅", "iyes ✅", "mantap 🔥", "sippp 🔥", "cus 💨", "gaspol 🔥",
+            # Tambahan karakter random dan ekspresi lebih bebas
+            "iyaa~", "iyaaa", "iyaaa!!", "iyaa bgt", "iyes!", "okeee", "oke deh~", "yes!", "yeees", "yeeees!", "yaaaa",
+            "gaskeun!", "gasskan!", "gasskeun dong", "mantab!", "mantabb!", "mantabb banget!", "langsungkeun!", "yappp", "yaaa gpp",
+            # Tambahan dari permintaan
+            "ya dua-duanya", "dua-duanya", "keduanya", "dua duanya", "ya keduanya", "ya dua duanya", "kedua duanya",
+        }
     def _get_memory_path(self):
         os.makedirs(MEMORY_DIR, exist_ok=True)
         return os.path.join(MEMORY_DIR, f"{self.user_id}.json")
@@ -180,6 +205,196 @@ class PromptProcessedMemory:
         pred = torch.argmax(outputs.logits, dim=1)
         return self.label_encoder.inverse_transform(pred.cpu().numpy())[0]
     
+    # def handle_confirmation_prompt_if_needed(self, user_reply: str) -> Optional[dict]:
+    #     print("func handle_confirmation_prompt_if_needed sedang berjalan....")
+    #     print(f"Original prompt input : {user_reply}")
+
+    #     # 🔁 Jika user_reply berupa list → gabungkan jadi string
+    #     if isinstance(user_reply, list):
+    #         user_reply = " ".join(user_reply)
+    #         print(f"📦 Diubah dari list ke string: {user_reply}")
+
+        
+        
+    #     normalized_reply = user_reply.strip().lower()
+    #     print(f"🧾 normalized prompt: {normalized_reply}")
+    #     print(f"⚠️ last_logger_clarification : {self.last_logger_clarification}")
+    #     clarification = self.last_logger_clarification
+
+    #     if not clarification:
+    #         print("❌ Tidak ada klarifikasi sebelumnya.")
+    #         return None
+
+    #     candidates = clarification.get("candidates", [])
+    #     ambiguous_input = clarification.get("ambiguous_input", "")
+
+    #     if len(candidates) != 2:
+    #         print("❌ Jumlah kandidat tidak valid.")
+    #         return None
+
+    #     # ✅ Jika memenuhi syarat lokasi ambigu dan tipe logger khas
+    #     if (
+    #         any(keyword in self.latest_prompt.lower() for keyword in ["sapon", "kali bawang"]) and
+    #         all(any(kw in logger.lower() for kw in ["arr", "awlr"]) for logger in candidates)
+    #     ):
+    #         print("🔁 Memanggil handle_dual_logger_selection() karena cocok kondisi.")
+    #         result = self.handle_dual_logger_selection(user_reply, candidates)
+    #         if result:
+    #             selected = result["logger"]
+    #             self.last_logger = selected[0] if isinstance(selected, list) else selected
+    #             self.last_logger_list = selected if isinstance(selected, list) else [selected]
+    #             self.last_logger_clarification = None
+
+    #             return {
+    #                 "prompt": self.latest_prompt or user_reply,
+    #                 "ambiguous_input": ambiguous_input,
+    #                 "confirmed": True,
+    #                 "logger": selected
+    #             }
+
+    #     # ✅ fallback default: jika hanya afirmatif umum → ambil semua kandidat
+    #     if normalized_reply in self.CONFIRM_YES_SYNONYMS:
+    #         print("✅ Klarifikasi umum afirmatif, ambil semua kandidat.")
+    #         self.last_logger = candidates[0]
+    #         self.last_logger_list = candidates
+    #         self.last_logger_clarification = None
+    #         return {
+    #             "prompt": self.latest_prompt or user_reply,
+    #             "ambiguous_input": ambiguous_input,
+    #             "confirmed": True,
+    #             "logger": candidates
+    #         }
+
+    #     print("⚠️ Tidak dikenali sebagai klarifikasi.")
+    #     return None
+    #     # normalized_reply = user_reply.strip().lower()
+
+    #     # if normalized_reply in CONFIRM_YES_SYNONYMS and getattr(self, "last_logger_clarification", None):
+    #     #     clarification = self.last_logger_clarification
+    #     #     print(f"Klarifikasi Kandidat adalah  : {clarification}") # 
+    #     #     candidates = clarification.get("candidates", [])
+    #     #     # GANTI KE CODE INI 
+    #     #     # if (
+    #     #     #     len(self.last_logger_list) == 2
+    #     #     #     and any(k in self.latest_prompt.lower() for k in ["sapon", "kali bawang"])
+    #     #     #     and all(
+    #     #     #         any(kw in logger.lower() for kw in ["arr", "awlr"])
+    #     #     #         for logger in self.last_logger_list
+    #     #     #     )
+    #     #     # ):
+    #     #     #     print("if jalan") #
+    #     #     #     result = self.handle_dual_logger_selection()
+    #     #     #     if result:
+    #     #     #         print(f"🎯 Logger yang dipilih: {result}")
+    #     #     #         selected = result["logger"]
+    #     #     #         if isinstance(selected, str):
+    #     #     #             self.last_logger_list = [selected]
+    #     #     #         elif isinstance(selected, list):
+    #     #     #             print("selected :", selected)
+    #     #     #             target = selected
+    #     #     #             self.last_logger_list = selected # bagaimana mengoper variable ini langsung ke return yang ada dibawah sana, agar melewati if else lain
+    #     #     #         # self.last_logger = self.last_logger_list[0]
+
+    #     #     if len(candidates) == 2:
+    #     #         selected_logger = candidates  # ✅ default ke kandidat pertama # KETEMU bntr
+    #     #         print("🧪 Type of selected_logger:", type(selected_logger))
+    #     #         print("🧪 selected_logger content:", selected_logger)
+                
+    #     #         self.last_logger = selected_logger
+    #     #         self.last_logger_list = [selected_logger]
+    #     #         self.last_logger_clarification = None  # 🔁 Reset setelah dipakai
+
+    #     #         print("📌 Klarifikasi dipilih otomatis:", selected_logger) # 
+    #     #         return {"confirmed": True, "logger": selected_logger}  # [ERROR] string indices must be integers, not 'str'
+    #     #         #  return {"prompt":"self.latest_prompt","confirmed": True, "logger": selected_logger} ubah ke return seperti ini
+ 
+    #     # return None
+    
+    def handle_confirmation_prompt_if_needed(self, user_reply: str) -> Optional[dict]:
+        print("func handle_confirmation_prompt_if_needed sedang berjalan....")
+        print(f"Original prompt input : {user_reply}")
+
+        # 🔁 Jika user_reply berupa list → gabungkan jadi string
+        if isinstance(user_reply, list):
+            user_reply = " ".join(user_reply)
+            print(f"📦 Diubah dari list ke string: {user_reply}")
+
+        normalized_reply = user_reply.strip().lower()
+        print(f"🧾 normalized prompt: {normalized_reply}")
+
+        # Coba ambil klarifikasi langsung
+        clarification = self.last_logger_clarification
+
+        # Jika tidak ada klarifikasi tersimpan, coba ekstrak dari response_history
+        if not clarification:
+            print("⚠️ last_logger_clarification kosong — mencoba ekstraksi dari response_history...")
+            import re
+
+            # Pola untuk mendeteksi 'pos {tipe} {lokasi}'
+            pattern = r"(pos\s+[a-z]+(?:\s+[a-z]+){0,2})"
+            logger_types = ['arr', 'awlr', 'awr', 'afmr', 'awqr', 'avwr', 'awgc']
+            history_text = " ".join(self.response_history).lower()
+            matches = re.findall(pattern, history_text)
+            candidates = [m for m in matches if any(t in m for t in logger_types)]
+            print("matches :", matches)
+
+            if len(candidates) == 2:
+                clarification = {
+                    "ambiguous_input": "logger sebelumnya",
+                    "candidates": candidates
+                }
+                self.last_logger_clarification = clarification
+                print("✅ Klarifikasi berhasil diambil dari response_history:", clarification)
+            else:
+                print("❌ Tidak ditemukan kandidat logger dari response_history.")
+                return None
+            
+        print(f"⚠️ last_logger_clarification : {clarification}")
+        candidates = clarification.get("candidates", [])
+        ambiguous_input = clarification.get("ambiguous_input", "")
+
+        if len(candidates) != 2:
+            print("❌ Jumlah kandidat tidak valid.")
+            return None
+
+        # ✅ Jika memenuhi syarat lokasi ambigu dan tipe logger khas
+        if (
+            any(keyword in self.latest_prompt.lower() for keyword in ["sapon", "kali bawang"]) and
+            all(any(kw in logger.lower() for kw in ["arr", "awlr"]) for logger in candidates)
+        ):
+            print("🔁 Memanggil handle_dual_logger_selection() karena cocok kondisi.")
+            result = self.handle_dual_logger_selection(user_reply, candidates)
+            if result:
+                selected = result["logger"]
+                self.last_logger = selected[0] if isinstance(selected, list) else selected
+                self.last_logger_list = selected if isinstance(selected, list) else [selected]
+                self.last_logger_clarification = None
+
+                return {
+                    "prompt": self.latest_prompt or user_reply,
+                    "ambiguous_input": ambiguous_input,
+                    "confirmed": True,
+                    "logger": selected
+                }
+
+        # ✅ fallback default: jika hanya afirmatif umum → ambil semua kandidat
+        if normalized_reply in self.CONFIRM_YES_SYNONYMS:
+            print("✅ Klarifikasi umum afirmatif, ambil semua kandidat.")
+            self.last_logger = candidates[0]
+            self.last_logger_list = candidates
+            self.last_logger_clarification = None
+            return {
+                "prompt": self.latest_prompt or user_reply,
+                "ambiguous_input": ambiguous_input,
+                "confirmed": True,
+                "logger": candidates
+            }
+
+        print("⚠️ Tidak dikenali sebagai klarifikasi.")
+        return None
+
+
+
     def confirm_logger_from_previous_suggestion(self, previous_assistant_message: str, user_reply: str) -> Optional[str]:
         """
         Jika user menjawab 'ya' dan assistant sebelumnya memberi saran logger,
@@ -266,24 +481,153 @@ class PromptProcessedMemory:
                 print("Gagal Mendapatkan konfirmasi logger")
         return None
     
+    # def _extract_context_memory(self, text: Optional[str] = None):
+    #     print("Function _extract_context_memory sedang berjalan")
+
+    #     def normalize_logger_name(name: str) -> str:
+    #         name = " ".join(name.strip().lower().split())
+    #         return name if name.startswith("pos ") else "pos " + name
+
+    #     combined_text = text.lower() if text else " ".join(self.prompt_history + self.response_history).lower()
+    #     print("📥 combined_text:", combined_text)
+    #     print(f"Latest Prompt : {self.latest_prompt}")
+
+    #     try:
+    #         print("Try code condition is working .....")
+    #         logger_data = fetch_list_logger()
+    #         logger_names_from_db = [normalize_logger_name(lg["nama_lokasi"]) for lg in logger_data if "nama_lokasi" in lg]
+    #         normalized_valid_loggers = set(logger_names_from_db)
+    #         print(f"✅ {len(normalized_valid_loggers)} logger valid dimuat.")
+    #         from collections import Counter
+    #         stripped_names = [name.replace("pos ", "").strip() for name in logger_names_from_db]
+    #         normalized_counter = Counter(stripped_names)
+    #     except Exception as e:
+    #         print("❌ [ERROR] fetch_list_logger gagal:", e)
+    #         normalized_valid_loggers = set()
+    #         normalized_counter = {}
+
+    #     logger_pattern = r"\b(?:logger|pos|afmr|awlr|awr|arr|adr|awqr|avwr|awgc)\s+(?:[a-z]{3,}(?:\s+[a-z]{3,}){0,3})"
+    #     raw_matches = re.findall(logger_pattern, combined_text)
+    #     print(f"🔍 logger_match (raw): {raw_matches}")
+
+    #     expanded_matches = self._clean_logger_list(raw_matches)
+
+    #     print("🧩 expanded_matches (awal):", expanded_matches)
+
+    #     if any(keyword in expanded_matches for keyword in ["kali bawang", "sapon"]):
+    #         print("⚠️ Deteksi kata eksplisit 'kali bawang' atau 'sapon' — token overlap dilewati")
+    #     else:
+    #         print("🔄 Mencoba pencocokan dengan token overlap...")
+    #         technical_tokens = {"pos", "logger", "data", "afmr", "awlr", "awr", "arr", "adr", "awqr", "avwr", "awgc"}
+    #         tokens = {word for word in self.latest_prompt.lower().split() if word not in technical_tokens and len(word) > 2}
+    #         print("🧠 Token bersih dari prompt:", tokens)
+
+    #         for logger in logger_names_from_db:
+    #             lokasi_tokens = {
+    #                 word for word in logger.replace("pos ", "").lower().split()
+    #                 if word not in technical_tokens and len(word) > 2
+    #             }
+    #             if lokasi_tokens & tokens:
+    #                 if logger not in expanded_matches:
+    #                     expanded_matches.append(logger)
+    #                 print(f"✅ Token overlap: {lokasi_tokens & tokens} cocok dengan '{logger}'")
+
+    #     # ✅ Bersihkan hanya sekali
+    #     stopwords = {
+    #         "kemarin", "kemaren", "hari", "ini", "lalu", "terakhir",
+    #         "minggu", "bulan", "tahun", "tanggal", "besok", "selama", "depan"
+    #     }
+    #     cleaned_matches = set()
+    #     self.logger_suggestions = {}
+    #     self.last_logger_clarification = None
+
+    #     for match in expanded_matches:
+    #         filtered = " ".join(word for word in match.split() if word.lower() not in stopwords)
+    #         norm = normalize_logger_name(filtered)
+    #         print(f"🧹 filtered: {filtered} → norm: {norm}")
+
+    #         if norm in normalized_valid_loggers:
+    #             cleaned_matches.add(norm)
+    #         else:
+    #             stripped_norm = norm.replace("pos ", "").strip()
+    #             if stripped_norm in {"sapon", "kali bawang"}:
+    #                 suggestions = [l for l in normalized_valid_loggers if stripped_norm in l]
+    #                 print(f"⚠️ Logger ambigu '{stripped_norm}' — Saran eksplisit: {suggestions}")
+    #             else:
+    #                 n_suggestions = min(normalized_counter.get(stripped_norm, 2), 3)
+    #                 suggestions = get_close_matches(norm, normalized_valid_loggers, n=n_suggestions, cutoff=0.7)
+    #                 print(f"📌 Saran fuzzy match: {suggestions}")
+
+    #             if suggestions:
+    #                 self.logger_suggestions[norm] = suggestions
+
+    #                 if len(suggestions) == 2:
+    #                     self.last_logger_clarification = {
+    #                         "ambiguous_input": norm,
+    #                         "candidates": suggestions
+    #                     }
+    #                     print("📌 last_logger_clarification disimpan:", self.last_logger_clarification)
+
+    #             print(f"⚠️ Tidak valid: {norm} — Saran: {suggestions}")
+
+    #     if cleaned_matches:
+    #         self.last_logger_list = list(cleaned_matches)
+    #         self.last_logger = self.last_logger_list[-1]
+    #         print("📌 last_logger_list:", self.last_logger_list)
+    #         print("📌 last_logger (terakhir):", self.last_logger)
+    #     else:
+    #         print("🚫 Tidak ada logger valid — mempertahankan logger sebelumnya.")
+    #         self.last_logger_list = self.last_logger_list or []
+
+    #     # 📅 Deteksi tanggal eksplisit
+    #     date_keywords = [
+    #         "hari ini", "kemarin", "kemaren", "minggu ini", "minggu lalu", "bulan lalu",
+    #         "awal bulan", "akhir bulan", "tahun lalu", "minggu terakhir", "bulan terakhir", "hari terakhir"
+    #     ]
+    #     for phrase in date_keywords:
+    #         if phrase in combined_text:
+    #             self.last_date = phrase
+    #             print("🗓️ Deteksi tanggal (keyword):", phrase)
+    #             break
+
+    #     # 📅 Deteksi tanggal relatif
+    #     relative_date_patterns = [
+    #         r"\d+\s+hari\s+(lalu|terakhir)",
+    #         r"\d+\s+minggu\s+(lalu|terakhir)",
+    #         r"\d+\s+bulan\s+(lalu|terakhir)"
+    #     ]
+    #     for pattern in relative_date_patterns:
+    #         match = re.search(pattern, combined_text)
+    #         if match:
+    #             self.last_date = match.group(0)
+    #             print("🗓️ Deteksi tanggal (relatif):", self.last_date)
+    #             break
+
+
     def _extract_context_memory(self, text: Optional[str] = None):
         print("Function _extract_context_memory sedang berjalan")
+        print(f"Latest Prompt : {self.latest_prompt}")
+
+        # if isinstance(self.latest_prompt, str) and self.latest_prompt.strip().lower() in self.CONFIRM_YES_SYNONYMS:
+        #     if self.last_logger_clarification:
+        #         print("⛔ Prompt hanya berupa konfirmasi umum & sudah ada klarifikasi logger — keluar dari context extraction.")
+        #         return
+
+        if self.latest_prompt.strip().lower() in self.CONFIRM_YES_SYNONYMS:
+            print(f"Klarifikasi Logger {self.last_logger_clarification}")
+            
         def normalize_logger_name(name: str) -> str:
             name = " ".join(name.strip().lower().split())
-            if not name.startswith("pos "):
-                name = "pos " + name
-            return name
+            return name if name.startswith("pos ") else "pos " + name
 
         combined_text = text.lower() if text else " ".join(self.prompt_history + self.response_history).lower()
         print("📥 combined_text:", combined_text)
-        print(f"Latest Prompt : {self.latest_prompt}")
-
+        
         try:
             print("Try code condition is working .....")
             logger_data = fetch_list_logger()
             logger_names_from_db = [normalize_logger_name(lg["nama_lokasi"]) for lg in logger_data if "nama_lokasi" in lg]
             normalized_valid_loggers = set(logger_names_from_db)
-            # print(f"normalized_valid_loggers : {normalized_valid_loggers}")
             print(f"✅ {len(normalized_valid_loggers)} logger valid dimuat.")
             from collections import Counter
             stripped_names = [name.replace("pos ", "").strip() for name in logger_names_from_db]
@@ -295,88 +639,101 @@ class PromptProcessedMemory:
 
         logger_pattern = r"\b(?:logger|pos|afmr|awlr|awr|arr|adr|awqr|avwr|awgc)\s+(?:[a-z]{3,}(?:\s+[a-z]{3,}){0,3})"
         raw_matches = re.findall(logger_pattern, combined_text)
-        print(f"🔍 logger_match (raw):, {raw_matches}, Prompt : {self.latest_prompt}")
+        print(f"🔍 logger_match (raw): {raw_matches}")
 
         expanded_matches = self._clean_logger_list(raw_matches)
-        print("🧩 expanded_matches:", expanded_matches)
-        print("TIPE expanded_matches:", type(expanded_matches))
-    
-        # Token overlap, kecuali untuk 'kali bawang' dan 'sapon'
-        if any(keyword in expanded_matches for keyword in ["kali bawang", "sapon"]):
-            print("⚠️ Deteksi kata eksplisit 'kali bawang' atau 'sapon' dalam prompt — token overlap dilewati")
-        else:
-            print("Else Berjalan.....")
-            # Stopwords teknis untuk nama lokasi
-            technical_tokens = {
-                "pos", "logger", "data","afmr", "awlr", "awr", "arr", "adr", "awqr", "avwr", "awgc"
-            }
 
-            tokens = set(
-                word for word in self.latest_prompt.lower().split()
-                if word not in technical_tokens and len(word) > 2
-            )
-            print("🧠 Token bersih dari prompt:", tokens, expanded_matches)
+        print("🧩 expanded_matches (awal):", expanded_matches)
+
+        if any(keyword in expanded_matches for keyword in ["kali bawang", "sapon"]):
+            print("⚠️ Deteksi kata eksplisit 'kali bawang' atau 'sapon' — token overlap dilewati")
+        else:
+            print("🔄 Mencoba pencocokan dengan token overlap...")
+            technical_tokens = {"pos", "logger", "data", "afmr", "awlr", "awr", "arr", "adr", "awqr", "avwr", "awgc"}
+            tokens = {word for word in self.latest_prompt.lower().split() if word not in technical_tokens and len(word) > 2}
+            print("🧠 Token bersih dari prompt:", tokens)
+
+            already_matched = set(normalize_logger_name(m) for m in raw_matches)
 
             for logger in logger_names_from_db:
-                print("For loop berjalan")
-                lokasi_tokens = set(
+                lokasi_tokens = {
                     word for word in logger.replace("pos ", "").lower().split()
                     if word not in technical_tokens and len(word) > 2
-                )
-                if lokasi_tokens & tokens:
-                    print(f"🧠 Token overlap: {lokasi_tokens & tokens} cocok dengan '{logger}'")
-                    expanded_matches.append(logger)
-                    break
-
-                stopwords = {
-                    "kemarin", "kemaren", "hari", "ini", "lalu", "terakhir",
-                    "minggu", "bulan", "tahun", "tanggal", "besok", "selama", "depan"
                 }
-                print("expanded_matches :",logger)
-                cleaned_matches = set()
-                self.logger_suggestions = {}
+                if lokasi_tokens & tokens:
+                    normalized_logger = normalize_logger_name(logger)
+                    if normalized_logger not in expanded_matches and normalized_logger not in already_matched:
+                        expanded_matches.append(normalized_logger)
+                        print(f"✅ Token overlap: {lokasi_tokens & tokens} cocok dengan '{logger}'")
 
-                for match in expanded_matches:
-                    filtered = " ".join(word for word in match.split() if word.lower() not in stopwords)
-                    norm = normalize_logger_name(filtered)
-                    print("filtered:", filtered, "→ norm:", norm)
+        stopwords = {
+            "kemarin", "kemaren", "hari", "ini", "lalu", "terakhir",
+            "minggu", "bulan", "tahun", "tanggal", "besok", "selama", "depan"
+        }
+        cleaned_matches = set()
+        self.logger_suggestions = {}
+        self.last_logger_clarification = None
 
-                    if norm in normalized_valid_loggers:
-                        cleaned_matches.add(norm)
-                    else:
-                        stripped_norm = norm.replace("pos ", "").strip()
-                        if stripped_norm in {"sapon", "kali bawang"}:
-                            suggestions = [l for l in normalized_valid_loggers if stripped_norm in l]
-                            print(f"⚠️ Logger ambigu '{stripped_norm}' — Saran eksplisit: {suggestions}")
-                        else:
-                            n_suggestions = min(normalized_counter.get(stripped_norm, 2), 3)
-                            suggestions = get_close_matches(norm, normalized_valid_loggers, n=n_suggestions, cutoff=0.7)
-                            print("Jumlah suggestions:", n_suggestions)
+        for match in expanded_matches:
+            filtered = " ".join(word for word in match.split() if word.lower() not in stopwords)
+            norm = normalize_logger_name(filtered)
+            print(f"🧹 filtered: {filtered} → norm: {norm}")
 
-                        if suggestions:
-                            self.logger_suggestions[norm] = suggestions
-                        print(f"⚠️ Tidak valid: {norm} — Saran: {suggestions}")
-            
-                if cleaned_matches:
-                    self.last_logger_list = list(cleaned_matches)
-                    self.last_logger = self.last_logger_list[-1]
-                    print("📌 last_logger_list:", self.last_logger_list)
-                    print("📌 last_logger (terakhir):", self.last_logger)
+            if norm in normalized_valid_loggers:
+                cleaned_matches.add(norm)
+            else:
+                stripped_norm = norm.replace("pos ", "").strip()
+                if stripped_norm in {"sapon", "kali bawang"}:
+                    suggestions = [l for l in normalized_valid_loggers if stripped_norm in l]
+                    print(f"⚠️ Logger ambigu '{stripped_norm}' — Saran eksplisit: {suggestions}")
                 else:
-                    print(f"🚫 Tidak ada logger valid ditemukan — mempertahankan last_logger sebelumnya. Yaitu {self.last_logger_list}")
-                    self.last_logger_list = self.last_logger_list or []
+                    n_suggestions = min(normalized_counter.get(stripped_norm, 2), 3)
+                    suggestions = get_close_matches(norm, normalized_valid_loggers, n=n_suggestions, cutoff=0.7)
+                    print(f"📌 Saran fuzzy match: {suggestions}")
 
+                if suggestions:
+                    self.logger_suggestions[norm] = suggestions
 
-                date_keywords = [
-                    "hari ini", "kemarin", "kemaren", "minggu ini", "minggu lalu", "bulan lalu",
-                    "awal bulan", "akhir bulan", "tahun lalu", "minggu terakhir", "bulan terakhir", "hari terakhir"
-                ]
-                for phrase in date_keywords:
-                    if phrase in combined_text:
-                        self.last_date = phrase
-                        print("🗓️ Deteksi tanggal (keyword):", phrase)
-                        break
-            
+                    if len(suggestions) == 2:
+                        self.last_logger_clarification = {
+                            "ambiguous_input": norm,
+                            "candidates": suggestions
+                        }
+                        print("📌 last_logger_clarification disimpan:", self.last_logger_clarification)
+
+                print(f"⚠️ Tidak valid: {norm} — Saran: {suggestions}")
+
+        if self.last_logger_clarification:
+            self.last_logger_list = []
+            self.last_logger = None
+            print("🛑 Logger dikosongkan karena menunggu klarifikasi dari user")
+        elif cleaned_matches:
+            print("cleaned_matches :",cleaned_matches)
+            print("panjang cleaned_matches", len(cleaned_matches))
+            # ✅ Jika sebelumnya ada saran klarifikasi, jangan pilih dua sekaligus
+            if self.last_logger_clarification:
+                self.last_logger_list = []
+                self.last_logger = None
+                print("🛑 Logger valid ditemukan, tapi sedang menunggu klarifikasi — tidak disimpan")
+            else:
+                self.last_logger_list = list(cleaned_matches)
+                self.last_logger = self.last_logger_list[0]
+                print("📌 last_logger_list:", self.last_logger_list)
+                print("📌 last_logger (terakhir):", self.last_logger)
+        else:
+            print("🚫 Tidak ada logger valid — mempertahankan logger sebelumnya.")
+            self.last_logger_list = self.last_logger_list or []
+
+        date_keywords = [
+            "hari ini", "kemarin", "kemaren", "minggu ini", "minggu lalu", "bulan lalu",
+            "awal bulan", "akhir bulan", "tahun lalu", "minggu terakhir", "bulan terakhir", "hari terakhir"
+        ]
+        for phrase in date_keywords:
+            if phrase in combined_text:
+                self.last_date = phrase
+                print("🗓️ Deteksi tanggal (keyword):", phrase)
+                break
+
         relative_date_patterns = [
             r"\d+\s+hari\s+(lalu|terakhir)",
             r"\d+\s+minggu\s+(lalu|terakhir)",
@@ -389,86 +746,6 @@ class PromptProcessedMemory:
                 print("🗓️ Deteksi tanggal (relatif):", self.last_date)
                 break
 
-    # def _extract_context_memory(self, text: Optional[str] = None):
-    #     def normalize_logger_name(name: str) -> str:
-    #         """Normalisasi nama logger: lowercase, strip, dan pastikan prefix 'pos ' ada"""
-    #         name = " ".join(name.strip().lower().split())
-    #         if not name.startswith("pos "):
-    #             name = "pos " + name
-    #         return name
-
-    #     # === Gabungkan teks prompt dan response
-    #     combined_text = text.lower() if text else " ".join(self.prompt_history + self.response_history).lower()
-    #     print("📥 combined_text:", combined_text)
-
-    #     # === Ambil daftar logger valid dari fetch_list_logger
-    #     try:
-    #         logger_data = fetch_list_logger()
-    #         logger_names_from_db = [normalize_logger_name(lg["nama_lokasi"]) for lg in logger_data if "nama_lokasi" in lg]
-    #         normalized_valid_loggers = set(logger_names_from_db)
-    #         print(f"✅ {len(normalized_valid_loggers)} logger valid dimuat.")
-    #     except Exception as e:
-    #         print("❌ [ERROR] fetch_list_logger gagal:", e)
-    #         normalized_valid_loggers = set()
-
-    #     # === Regex deteksi kasar logger
-    #     logger_pattern = r"\b(?:pos|afmr|awlr|awr|arr|adr|awqr|avwr|awgc)\s+(?:[a-z]{3,}(?:\s+[a-z]{3,}){0,3})"
-    #     raw_matches = re.findall(logger_pattern, combined_text)
-    #     print("🔍 logger_match (raw):", raw_matches)
-
-    #     # === Pisahkan gabungan seperti 'dan'
-    #     expanded_matches = self._clean_logger_list(raw_matches)
-    #     print("🧩 expanded_matches:", expanded_matches)
-
-    #     # === Daftar kata waktu yang bukan bagian dari nama logger
-    #     stopwords = {
-    #         "kemarin", "kemaren", "hari", "ini", "lalu", "terakhir", 
-    #         "minggu", "bulan", "tahun", "tanggal", "besok", "selama", "depan"
-    #     }
-
-    #     cleaned_matches = set()
-    #     for match in expanded_matches:
-    #         # Hapus kata-kata waktu dari hasil regex
-    #         filtered = " ".join(word for word in match.split() if word.lower() not in stopwords)
-    #         print("filtered", filtered)
-    #         print("All Loggers Name :", normalized_valid_loggers)
-    #         norm = normalize_logger_name(filtered)
-    #         print("norm", norm)
-    #         if norm in normalized_valid_loggers:
-    #             cleaned_matches.add(norm)
-    #         else:
-    #             print(f"⚠️ Tidak valid: {norm}")
-
-    #     if cleaned_matches:
-    #         self.last_logger_list = list(cleaned_matches)
-    #         self.last_logger = self.last_logger_list[-1]
-    #         print("📌 last_logger_list:", self.last_logger_list)
-    #         print("📌 last_logger (terakhir):", self.last_logger)
-    #     else:
-    #         print("🚫 Tidak ada logger valid ditemukan.")
-
-    #     # === Ekstraksi tanggal
-    #     date_keywords = [
-    #         "hari ini", "kemarin", "kemaren", "minggu ini", "minggu lalu", "bulan lalu",
-    #         "awal bulan", "akhir bulan", "tahun lalu", "minggu terakhir", "bulan terakhir", "hari terakhir"
-    #     ]
-    #     for phrase in date_keywords:
-    #         if phrase in combined_text:
-    #             self.last_date = phrase
-    #             print("🗓️ Deteksi tanggal (keyword):", phrase)
-    #             break
-
-    #     relative_date_patterns = [
-    #         r"\d+\s+hari\s+(lalu|terakhir)",
-    #         r"\d+\s+minggu\s+(lalu|terakhir)",
-    #         r"\d+\s+bulan\s+(lalu|terakhir)"
-    #     ]
-    #     for pattern in relative_date_patterns:
-    #         match = re.search(pattern, combined_text)
-    #         if match:
-    #             self.last_date = match.group(0)
-    #             print("🗓️ Deteksi tanggal (relatif):", self.last_date)
-    #             break
 
     def _should_use_memory(self, prompt: str) -> bool:
         print("_should_use_memory telah berjalan HEHE")
@@ -572,6 +849,181 @@ class PromptProcessedMemory:
         except Exception as e:
             print("❌ Gagal memproses LLM:", e)
             return user_messages[-1]["content"], False
+    
+    def handle_dual_logger_selection(self, user_reply: str, candidates: List[str]) -> Optional[dict]:
+        print("handle_dual_logger_selection sedang berjalan....")
+        prompt = user_reply.strip().lower()
+        print(f"Candidates : {candidates}")
+
+        ambiguous_keywords = ["sapon", "kali bawang"]
+
+        if len(candidates) != 2:
+            print("❌ Jumlah kandidat bukan 2.")
+            return None
+
+        if not any(keyword in prompt or any(keyword in l.lower() for l in candidates) for keyword in ambiguous_keywords):
+            print("⚠️ Lokasi bukan 'sapon' atau 'kali bawang'.")
+            return None
+
+        norm_cand_1 = candidates[0].lower()
+        norm_cand_2 = candidates[1].lower()
+
+        if any(
+            phrase in prompt
+            for phrase in ["ya", "yaa", "yaaa", "ya keduanya", "keduanya", "ya dua-duanya", "dua duanya"]
+        ) and not (norm_cand_1 in prompt or norm_cand_2 in prompt):
+            print("✅ User memilih kedua logger.")
+            return {"confirmed": True, "logger": [candidates[0], candidates[1]]}
+
+        if norm_cand_1 in prompt:
+            print(f"✅ User memilih logger: {candidates[0]}")
+            return {"confirmed": True, "logger": candidates[0]}
+
+        if norm_cand_2 in prompt:
+            print(f"✅ User memilih logger: {candidates[1]}")
+            return {"confirmed": True, "logger": candidates[1]}
+
+        print("⚠️ Klarifikasi tidak dikenali.")
+        return None
+
+    # def handle_dual_logger_selection(self):
+    #     print("handle_dual_logger_selection sedang berjalan....")
+    #     """
+    #     Tangani klarifikasi pengguna terhadap 2 logger ambigu khusus ['sapon', 'kali bawang']:
+    #     - Jika user bilang 'ya keduanya' → ambil dua-duanya.
+    #     - Jika menyebut satu → ambil yang disebut.
+    #     - Jika tidak dikenali atau bukan lokasi ambigu → return None.
+    #     """
+    #     prompt = self.latest_prompt.strip().lower()
+    #     candidates = self.last_logger_list
+    #     print(f"Candidates : {candidates}")
+    #     ambiguous_keywords = ["sapon", "kali bawang"]
+
+    #     if len(candidates) != 2:
+    #         print("❌ Jumlah kandidat bukan 2.")
+    #         return None
+
+    #     # Periksa apakah keyword ambigu ada di prompt atau logger
+    #     if not any(keyword in prompt or any(keyword in l.lower() for l in candidates) for keyword in ambiguous_keywords):
+    #         print("⚠️ Lokasi bukan 'sapon' atau 'kali bawang'.")
+    #         return None
+
+    #     norm_cand_1 = candidates[0].lower()
+    #     norm_cand_2 = candidates[1].lower()
+        
+    #     # Case 1: User pilih keduanya
+    #     if any(
+    #         phrase in prompt
+    #         for phrase in ["ya", "yaa", "yaaa", "ya keduanya", "keduanya", "ya dua-duanya", "dua duanya"]
+    #     ) and not (norm_cand_1 in prompt or norm_cand_2 in prompt):
+    #         print("✅ User memilih kedua logger.")
+    #         return {"confirmed": True, "logger": [candidates[0], candidates[1]]}
+
+    #     # Case 2: User menyebut salah satu logger
+    #     if norm_cand_1 in prompt:
+    #         print(f"✅ User memilih logger: {candidates[0]}")
+    #         return {"confirmed": True, "logger": candidates[0]}
+
+    #     if norm_cand_2 in prompt:
+    #         print(f"✅ User memilih logger: {candidates[1]}")
+    #         return {"confirmed": True, "logger": candidates[1]}
+
+    #     print("⚠️ Klarifikasi tidak dikenali.")
+    #     return None
+    
+    def handle_confirmation_prompt_if_needed_v2(self, user_reply: str) -> Optional[Dict]:
+        print("🔍 func handle_confirmation_prompt_if_needed_v2 sedang berjalan....")
+        print(f"🗣 latest prompt adalah : {user_reply}")
+
+        CONFIRM_YES_SYNONYMS = {
+            # Karakter ekspresif/random
+            "?", "??", "???", "????", "!", "!!", "!!!", "!!!!", "!!!!!", "...", "....", "......","ya",
+            # Variasi dasar & pertanyaan
+            "ya", "iya", "iya?", "iya!", "iya?!", "betul", "betul?", "benar", "benar?", "bener", "bener?",
+            "betool", "betool?", "betool!!", "betool!", "benerrr", "benerrrr!","boleh","yaa","yaaa","yaaaa",
+            # Variasi informal dan slang
+            "yoi", "yap", "y", "yo", "sip", "ok", "oke", "okey", "yes", "yess", "yesss", "you bet", "yosh", "yoa", "yo’i",
+            # Tambahan penekanan/emosi
+            "ya dong", "iya deh", "iya banget", "iya lah", "iyalah", "iyalah sayang", "iyaa", "iyaa dong", "iyaa!", "iyap", 
+            "yes dong", "yes lah", "yes banget", "yes yes!",
+            # Kata penegasan atau afirmatif
+            "udah pasti", "jelas", "jelas banget", "pastinya", "tentu", "tentu saja", "pasti", "pastilah", "bener banget",
+            # Chat slang/kasual + ekspresi acak
+            "gas", "cus", "gass", "gasss", "gaskeun", "mantap", "mantul", "sip deh", "sippp", "sippp!", "sipppp", "siap", "siap!", 
+            "go!", "ayoo!", "ayok", "hayuk", "lanjut", "langsung aja", "okedeh", "ok sip", "ok gas", "langsung gas",
+            # Emoji & kombinasi
+            "ya 👍", "oke 👍", "sip 👍", "yoi 💪", "yes ✅", "betul ✅", "iyes ✅", "mantap 🔥", "sippp 🔥", "cus 💨", "gaspol 🔥",
+            # Tambahan karakter random dan ekspresi lebih bebas
+            "iyaa~", "iyaaa", "iyaaa!!", "iyaa bgt", "iyes!", "okeee", "oke deh~", "yes!", "yeees", "yeeees!", "yaaaa",
+            "gaskeun!", "gasskan!", "gasskeun dong", "mantab!", "mantabb!", "mantabb banget!", "langsungkeun!", "yappp", "yaaa gpp",
+            # Tambahan dari permintaan
+            "ya dua-duanya", "dua-duanya", "keduanya", "dua duanya", "ya keduanya", "ya dua duanya", "kedua duanya",
+        }
+
+        prompt = user_reply.strip().lower()
+        print("prompt",prompt)
+        clarification = self.last_logger_clarification
+
+        if not clarification:
+            print("❌ Tidak ada data klarifikasi.")
+            return None
+
+        candidates = clarification.get("candidates", [])
+        ambiguous_input = clarification.get("ambiguous_input", "")
+        if len(candidates) != 2:
+            print("❌ Jumlah kandidat tidak sesuai.")
+            return None
+
+        norm_cand_1 = candidates[0].lower()
+        norm_cand_2 = candidates[1].lower()
+
+        # Case 1: pilih dua-duanya
+        if any(kw in prompt for kw in {"keduanya", "dua-duanya", "ya keduanya", "ya dua-duanya"}):
+            print("✅ User memilih dua kandidat.")
+            return {
+                "prompt": user_reply,
+                "ambiguous_input": ambiguous_input,
+                "confirmed": True,
+                "logger": [candidates[0], candidates[1]]
+            }
+
+        # Case 2: user menyebut salah satu kandidat secara eksplisit
+        for cand in [norm_cand_1, norm_cand_2]:
+            if cand in prompt:
+                selected = candidates[0] if cand == norm_cand_1 else candidates[1]
+                print(f"✅ User menyebutkan kandidat eksplisit: {selected}")
+                return {
+                    "prompt": user_reply,
+                    "ambiguous_input": ambiguous_input,
+                    "confirmed": True,
+                    "logger": selected
+                }
+
+        # Case 3: user menyebutkan sebagian nama logger
+        for cand in candidates:
+            cand_tokens = set(cand.lower().split())
+            if any(token in prompt.split() for token in cand_tokens):
+                print(f"✅ Token logger ditemukan dalam prompt: {cand}")
+                return {
+                    "prompt": user_reply,
+                    "ambiguous_input": ambiguous_input,
+                    "confirmed": True,
+                    "logger": cand
+                }
+
+        # Case 4: default afirmatif ke dua kandidat
+        if prompt in CONFIRM_YES_SYNONYMS or any(affirm in prompt for affirm in CONFIRM_YES_SYNONYMS):
+            print("🟡 Jawaban afirmatif, default ke dua kandidat.")
+            return {
+                "prompt": user_reply,
+                "ambiguous_input": ambiguous_input,
+                "confirmed": True,
+                "logger": candidates
+            }
+
+        print("⚠️ Tidak bisa mengenali klarifikasi.")
+        return None
+
 
 
     def process_new_prompt(self, new_prompt: str) -> Dict:
@@ -584,39 +1036,53 @@ class PromptProcessedMemory:
         print("USER MESSAGES :\n", user_messages)
         print("\nLAST PROMPT", new_prompt)
 
-        # Gunakan LLM untuk menyusun prompt eksplisit berdasarkan chat history
-        # combined_text, is_direct_answer = self.resolve_ambiguous_prompt_with_llm(user_messages, model_name=model_name)
-        # print("combined_text", combined_text)
-        # print("is_direct_answer", is_direct_answer)
-        # if is_direct_answer:
-        #     print("\n✅ Ini adalah jawaban langsung dari LLM, tidak perlu intent.")
-        #     return self.handle_direct_answer(combined_text)  # Fungsi penanganan langsung
-        # Jika bukan jawaban langsung → proses seperti biasa
-        # try:
-        #     self.intent = self._predict_intent_bert(new_prompt)
-        # except Exception as e:
-        #     print(f"[INTENT PREDICTION ERROR] {e}")
-        #     self.intent = "unknown_intent"
-
         self.latest_prompt = new_prompt
         self.prompt_history.append(new_prompt)
         self.last_date = None
 
         print("\nnew_prompt di function process_new_prompt", new_prompt)
         print(f"\nIntent di function procces_new_prompt adalah : {self.intent}")
-        print(f"\nPos Logger terakhir {self.last_logger}") # self.prev_intent
-        print(f"\nIntent terakhir adalah : {self.prev_intent}") # self.prev_intent
+        print(f"\nPos Logger terakhir {self.last_logger}")
+        print(f"\nIntent terakhir adalah : {self.prev_intent}")
+
+        # ✅ Jika new_prompt adalah hasil konfirmasi
         
+        if isinstance(new_prompt, dict) and new_prompt.get("confirmed") is True:
+            confirmed_logger = new_prompt["logger"]
+            self.latest_prompt = new_prompt.get("prompt", "")
+            self.last_logger_list = confirmed_logger if isinstance(confirmed_logger, list) else [confirmed_logger]
+            self.last_logger = self.last_logger_list[0]
+            self.last_logger_clarification = None
+            self.prev_intent = self.prev_intent
+            self.intent = self.intent
+            target = self.last_logger_list
 
-        # Ekstrak context logger dan tanggal dari prompt yang telah disambiguasi
+            print("🎯 Prompt hasil klarifikasi — langsung return.")
+            print(f"[FINAL] Intent yang digunakan: {self.intent}, Target: {target}, Date: {self.last_date}")
+            return {
+                "intent": self.intent,
+                "target": target,
+                "date": self.last_date,
+                "latest_prompt": self.latest_prompt,
+                "logger_suggestions": self.logger_suggestions
+            }
+        
+        clarification_response = self.handle_confirmation_prompt_if_needed(self.latest_prompt)
+        print("clarification_response adalah",clarification_response)
+        if clarification_response:
+            return clarification_response
+
+        print("new_prompt adalah :", new_prompt)
         self._extract_context_memory(text=new_prompt)
+        print("func _extract_context_memory telah selesai berjalan !")
+        print(f"Prompt terbaru setelah _extract_context_memory adalah {self.latest_prompt}")
+        print(f"self.last_logger adalah ini : {self.last_logger}")
+        print(f"LIST dari self.last_logger adalah ini : {self.last_logger_list}") # jika sudah ada ini
 
-        # 1. Backup intent lama
-        # Hanya update prev_intent jika intent sebelumnya valid
         print(f"\n Intent baru {self.intent} dan intent lama adalah {self.prev_intent}")
         print(f"Intent Sebelumnya {self.prev_intent}, target sebelumnya {self.prev_target}, waktu sebelumnya {self.prev_date}")
 
-        if self.intent not in ["ai_limitation", "unknown_intent"]: # Update
+        if self.intent not in ["ai_limitation", "unknown_intent"]:
             self.prev_intent = self.intent
 
         if self.last_logger:
@@ -627,40 +1093,96 @@ class PromptProcessedMemory:
             self.prev_date = self.last_date
             print(f"Tanggal sebelumnya adalah : {self.prev_date}")
 
-        # 2. Predict intent
         try:
             self.intent = self._predict_intent_bert(new_prompt)
         except Exception as e:
             print(f"[INTENT PREDICTION ERROR] {e}")
             self.intent = "unknown_intent"
 
-        # 3. Tentukan fallback intent jika perlu
         ambiguous_intents = ["ai_limitation", "unknown_intent"]
         effective_intent = self.intent
+        # menaruh kondisi untuk handler disini atau
 
         if self.intent in ambiguous_intents and self.prev_intent in [
             "compare_parameter_across_loggers", "analyze_logger_by_date", 
             "compare_logger_by_date", "compare_logger_data", "show_logger_data"
         ]:
-            print(f"🧠 Menggunakan prev_intent karena intent saat ini ambigu: {self.intent}")
+            print(f"\U0001f9e0 Menggunakan prev_intent karena intent saat ini ambigu: {self.intent}")
             effective_intent = self.prev_intent
             raw_targets = self.last_logger_list if self.last_logger_list else ([self.last_logger] if self.last_logger else [])
+            print(f"IN AMBIGOUS CONDITION RAW TARGET IS : {raw_targets}")
             target = self._clean_logger_list(raw_targets)
-        else:
-            if self.intent in [
+
+        else: # kenapa harus pake kode  ini
+            print("else atas berjalan....")
+            print(f"last_logger_clarification : {self.last_logger_clarification}")
+            # DEBUG Here
+            print(f"Daftar logger yang teridentifikasi {self.last_logger_list}")
+            if self.last_logger_clarification and not self.last_logger:
+                print("\u26a0\ufe0f Sedang menunggu klarifikasi logger — target dikosongkan")
+                self.last_logger_list = []  # ✅ Bersihkan agar tidak dipakai di handle_intent
+                target = []
+
+            elif self.intent in [
                 "show_logger_data", "analyze_logger_by_date", "fetch_logger_by_date",
                 "show_selected_parameter", "compare_parameter_across_loggers",
                 "compare_logger_data", "compare_logger_by_date"
             ]:
-                raw_targets = self.last_logger_list if self.last_logger_list else ([self.last_logger] if self.last_logger else [])
-                target = self._clean_logger_list(raw_targets)
+                if self.last_logger_clarification and self.last_logger:
+                    print(" Klarifikasi selesai — gunakan hanya satu logger hasil klarifikasi")
+                    target = [self.last_logger]
+                    self.last_logger_list = [self.last_logger]  # ✅ Sinkronisasi agar handle_intent aman
+                    self.last_logger_clarification = None
+                else:
+                    raw_targets = self.last_logger_list if self.last_logger_list else ([self.last_logger] if self.last_logger else [])
+                    print("PRINT RAW TARGET :",raw_targets) # PRINT RAW TARGET : ['pos arr hargorejo']
+                    target = self._clean_logger_list(raw_targets)
+                    print("PRINT _clean_logger_list TARGET :",target)
+                    if len(target) > 1:
+                        print(f" Ditemukan beberapa target: {target}, mengambil yang pertama saja.")
             else:
+                print("Else berjalan ....")
                 target = self.last_logger
+        
+        # tetap dibawah sini
+        print(f"Nilai last_logger_list {self.last_logger_list} dan panjang data : {len(self.last_logger_list)}")
+        # print(f"Klarifikasi Logger adalah : {self.last_logger_clarification['candidates']}") #IGNORE
+        # get specific logger condition and prompt
+        print(f"Prompt nya adalah : {self.latest_prompt}")
+        print(f"Intentnya adalah {effective_intent}")
+        # if (
+        #     len(self.last_logger_list) == 2
+        #     and any(k in self.latest_prompt.lower() for k in ["sapon", "kali bawang"])
+        #     and all(
+        #         any(kw in logger.lower() for kw in ["arr", "awlr"])
+        #         for logger in self.last_logger_list
+        #     )
+        # ):
+        #     print("if jalan") #
+        #     result = self.handle_dual_logger_selection()
+        #     if result:
+        #         print(f"🎯 Logger yang dipilih: {result}")
+        #         selected = result["logger"]
+        #         if isinstance(selected, str):
+        #             self.last_logger_list = [selected]
+        #         elif isinstance(selected, list):
+        #             print("selected :", selected)
+        #             target = selected
+        #             self.last_logger_list = selected # bagaimana mengoper variable ini langsung ke return yang ada dibawah sana, agar melewati if else lain
+        #         # self.last_logger = self.last_logger_list[0]
 
-        # 4. Finalize
         print(f"self.logger_suggestions adalah, {self.logger_suggestions}")
         self.intent = effective_intent
         print(f"[FINAL] Intent yang digunakan: {self.intent}, Target: {target}, Date: {self.last_date}")
+
+        return {
+            "intent": self.intent,
+            "target": target,
+            "date": self.last_date,
+            "latest_prompt": self.latest_prompt,
+            "logger_suggestions": self.logger_suggestions
+        }
+
         # # Langkah 1: Daftar intent ambigu
         # ambiguous_intents = ["ai_limitation", "unknown_intent"]
 
@@ -690,13 +1212,7 @@ class PromptProcessedMemory:
         
         # self.intent = effective_intent  # ✅ force override agar digunakan juga oleh handle_intent()
 
-        return {
-            "intent": self.intent,
-            "target": target,
-            "date": self.last_date,
-            "latest_prompt": self.latest_prompt,
-            "logger_suggestions": self.logger_suggestions if not target else {}
-        }
+        
         # if self.prev_intent in ["compare_parameter_across_loggers"]: # kode ini digunakan untuk mengambil konteks sebelumnya melalui intent sebelumnya, 
         #     print(f"self.prev_intent == {self.prev_intent} HEHE Previous Intent is Finally saved")
         #     raw_targets = self.last_logger_list if self.last_logger_list else ([self.last_logger] if self.last_logger else [])
@@ -1011,11 +1527,11 @@ class IntentManager:
             "get_logger_photo_path": self.get_photo_path, # safe id_logger, date_info, fetched data(before llm)
             "how_it_works": self.explain_system, # safe id_logger, date_info, fetched data(before llm)
             "analyze_logger_by_date": self.analyze_by_date, # safe id_logger, date_info, fetched data(before llm)
-            "ai_limitation": self.ai_limitation, # safe id_logger, date_info, fetched data(before llm)
+            "ai_limitation": self.ai_limitation, # safe id_logger, date_info, fetched data(before llm) # abaikan 
             "show_online_logger" : self.connection_status, # safe id_logger, date_info, fetched data(before llm)
             "show_logger_info": self.show_logger_info,
-            "direct_answer": self.direct_answer
-        }
+            "direct_answer": self.direct_answer # abaikan
+        } 
     # def handle_intent(self):
     #     prompt = self.memory.latest_prompt
     #     intent = self.memory.intent
@@ -1037,14 +1553,10 @@ class IntentManager:
     def handle_intent(self):
         prompt = self.memory.latest_prompt
         intent = self.memory.intent
-        target = self.memory.last_logger_list or [self.memory.last_logger]
+        target = self.memory.last_logger_list or [self.memory.last_logger] # [self.memory.last_logger] # 
         date = self.memory.last_date
 
-        # ✅ Tambahkan ini untuk mencegah error
-        # target = [t for t in target if t is not None]
-        # if not target:
-        #     return "⚠️ Tidak ditemukan logger yang valid dari permintaan Anda."
-
+        print("func handle_intent telah berjalan.....")
         print(f"Dari Prompt {prompt} Intent adalah : {intent}, target logger adalah : {target}, tanggal yang dicari adalah : {date}")
         func = self.intent_map.get(intent, self.fallback_response)
         return func()
@@ -1056,6 +1568,7 @@ class IntentManager:
         print("Intent Sebelumnya :", self.memory.prev_intent)
         prompt = self.memory.latest_prompt.lower()
         intent = self.memory.intent
+        # target_loggers = [self.memory.last_logger]
         target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
         logger_list = fetch_list_logger()
 
@@ -1860,7 +2373,11 @@ class IntentManager:
                     "Tugas Anda adalah menjawab pertanyaan pengguna secara langsung berdasarkan informasi yang tersedia dari sistem.\n"
                     "Jika data ditemukan, berikan jawaban yang tepat dan singkat.\n"
                     "Jika data **tidak tersedia**, berikan jawaban maaf yang sopan tanpa mengarang atau menebak.\n"
-                    "JANGAN mengatakan 'saya tidak tahu' jika data tersedia, dan JANGAN mengarang jika data tidak tersedia."
+                    "JANGAN mengatakan 'saya tidak tahu' jika data tersedia, dan JANGAN mengarang jika data tidak tersedia.\n\n"
+                    "Keterangan singkatan umum:\n"
+                    "- WS: Weather Station\n"
+                    "- TB: Tipping Bucket (curah hujan)\n"
+                    "- US: Ultrasonic Sensor (tinggi muka air)"
                 )
             },
             {

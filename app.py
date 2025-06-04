@@ -15,6 +15,48 @@ BERT_MODEL_PATH = "_new_model/intent_model"
 LABEL_ENCODER_PATH = "_new_model/label_encoder.pkl"
 
 @app.route("/chat", methods=["POST"])
+# def chat_endpoint():
+#     payload = request.get_json(force=True)
+#     model_name = payload.get("model", "llama3.1:8b")
+#     user_messages = payload.get("messages", [])
+#     user_id = payload.get("uuid")
+#     print("🔑 user_id:", user_id)
+
+#     try:
+#         latest_user_msg = next((m["content"] for m in reversed(user_messages) if m["role"] == "user"), "")
+#         prev_assistant_msg = next((m["content"] for m in reversed(user_messages) if m["role"] == "assistant"), "")
+
+#         memory = PromptProcessedMemory(
+#             user_id=user_id,
+#             user_messages=user_messages,
+#             bert_model_path=BERT_MODEL_PATH,
+#             label_encoder_path=LABEL_ENCODER_PATH
+#         )
+
+#         result = memory.process_new_prompt(latest_user_msg)
+#         print("Flask API code")
+#         print(f"result : {result}") # {'intent': 'show_logger_data', 'target': [], 'date': None, 'latest_prompt': 'berikan data di pos sapon', 'logger_suggestions': {'pos sapon': ['pos arr sapon', 'pos awlr sapon']}}
+#         if isinstance(result, dict) and result.get("message"):
+#             return jsonify({
+#                 "model": model_name,
+#                 "created_at": datetime.now(timezone.utc).isoformat() + "Z",
+#                 "message": result["message"]
+#             })
+
+#         return jsonify({
+#             "model": model_name,
+#             "created_at": datetime.now(timezone.utc).isoformat() + "Z",
+#             "message": {"role": "assistant", "content": result}
+#         })
+
+#     except Exception as e:
+#         print(f"[ERROR] {e}")
+#         return jsonify({
+#             "model": model_name,
+#             "created_at": datetime.now(timezone.utc).isoformat() + "Z",
+#             "message": {"role": "assistant", "content": "Maaf, terjadi kesalahan saat memproses permintaan Anda."}
+#         }), 500
+    
 def chat_endpoint():
     payload = request.get_json(force=True)
     model_name = payload.get("model", "llama3.1:8b")
@@ -31,8 +73,8 @@ def chat_endpoint():
         memory = PromptProcessedMemory(
             user_id=user_id,
             user_messages=user_messages,
-            bert_model_path=BERT_MODEL_PATH,
-            label_encoder_path=LABEL_ENCODER_PATH
+            bert_model_path=BERT_MODEL_PATH, # dont change this
+            label_encoder_path=LABEL_ENCODER_PATH # dont change this
         )
 
         # 🧹 Reset memori jika chat terlalu banyak
@@ -41,16 +83,34 @@ def chat_endpoint():
         intent_manager = IntentManager(memory)
 
         # ✅ Deteksi jika user mengkonfirmasi saran logger sebelumnya
+        print("Flask API CODE is running ⚡")
         print("prev_assistant_msg", prev_assistant_msg)
-        confirmed_logger = memory.confirm_logger_from_previous_suggestion(prev_assistant_msg, last_msg)
-        print(f"confirmed_logger adalah : {confirmed_logger}" )
-        if confirmed_logger:
-            intent_info = memory.process_new_prompt(confirmed_logger)
+        # confirmed_logger = memory.confirm_logger_from_previous_suggestion(prev_assistant_msg, last_msg)
+        confirm_result = memory.handle_confirmation_prompt_if_needed(last_msg)
+        print(f"Sugesti logger : {memory.last_logger_clarification}")
+        print(f"🔁 confirm_result:", confirm_result)
+        
+        # Cek apakah handle_confirmation_prompt_if_needed mengembalikan dict = siap lanjut fetch
+        if isinstance(confirm_result, dict) and confirm_result.get("confirmed"):
+            # Gunakan logger terkonfirmasi dan langsung fetch intent
+            confirmed_logger = confirm_result["logger"]
+            print(f"🔔 Hasil yang dikonfirmasi: {confirm_result}")
+            print(f"✅ Logger dikonfirmasi: {confirmed_logger}")
+            intent_info = memory.process_new_prompt(confirm_result)
             result = intent_manager.handle_intent()
+
             return jsonify({
                 "model": model_name,
                 "created_at": datetime.now(timezone.utc).isoformat() + "Z",
                 "message": {"role": "assistant", "content": result}
+            })
+
+        # Jika hanya string klarifikasi (bukan dict), langsung tampilkan ke user
+        elif isinstance(confirm_result, str):
+            return jsonify({
+                "model": model_name,
+                "created_at": datetime.now(timezone.utc).isoformat() + "Z",
+                "message": {"role": "assistant", "content": confirm_result}
             })
 
         # ✅ Jalankan intent normal
@@ -69,7 +129,7 @@ def chat_endpoint():
         memory._save_user_memory() #  update GIT
 
         # ❓ Tawarkan konfirmasi jika logger tidak dikenali
-        if (not target or target == []) and logger_suggestions:
+        if logger_suggestions and any(len(v) == 2 for v in logger_suggestions.values()):
             suggestions_text = []
             for invalid_logger, candidates in logger_suggestions.items():
                 if candidates and len(candidates) == 2:
