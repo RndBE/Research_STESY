@@ -405,7 +405,7 @@ class PromptProcessedMemory:
             print("matches :", matches)
             print("candidates :", candidates,"Panjang data adalah", len(candidates))
 
-            if len(candidates) >= 2:
+            if len(candidates) > 2:
                 print(f"Panjang dari kandidat adalah {len(candidates)}")
                 candidates = self.normalize_logger_list_from_history(candidates)
 
