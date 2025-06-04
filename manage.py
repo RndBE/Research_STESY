@@ -13,6 +13,7 @@ from difflib import get_close_matches
 from flask import Flask, request, jsonify
 from typing import List, Dict, Tuple
 from nltk.tokenize import word_tokenize
+from difflib import SequenceMatcher
 
 MEMORY_DIR = "user_memory"
 
@@ -326,6 +327,46 @@ class PromptProcessedMemory:
         if all(get_location_key(name) == base_key for name in clarification[1:]):
             return clarification
         return None
+    
+    def normalize_logger_list_from_history(self, list_random):
+        print("📌 func normalize_logger_list_from_history sedang berjalan....")
+        print(f"📥 list_random adalah: {list_random}")
+
+        if list_random is None:
+            print("❌ list_random bernilai None — langsung return None")
+            return None
+
+        if not isinstance(list_random, list) or len(list_random) == 0:
+            print("⚠️ list_random kosong atau bukan list — return None")
+            return None
+
+        # ✅ Kandidat benar (hardcoded)
+        list_candidates = [
+            ['Pos ARR Sapon', 'Pos AWLR Sapon'],
+            ['Pos ARR Kali Bawang', 'Pos AWLR Kali Bawang']
+        ]
+
+        from difflib import SequenceMatcher
+
+        def flatten(text):
+            return text.lower().replace("pos ", "").replace("  ", " ").strip()
+
+        def similarity_score(a, b):
+            return SequenceMatcher(None, flatten(a), flatten(b)).ratio()
+
+        for candidate in list_candidates:
+            scores = []
+            for cand_logger in candidate:
+                best_score = max([similarity_score(cand_logger, r) for r in list_random])
+                scores.append(best_score)
+            avg_score = sum(scores) / len(scores)
+            print(f"🔎 Kandidat: {candidate} — Skor rata-rata: {avg_score:.2f}")
+            if avg_score > 0.75:
+                print(f"✅ Klarifikasi cocok ditemukan: {candidate}")
+                return candidate
+
+        print("❌ Tidak ada klarifikasi cocok.")
+        return None
 
     
     def handle_confirmation_prompt_if_needed(self, user_reply: str) -> Optional[dict]:
@@ -344,7 +385,8 @@ class PromptProcessedMemory:
         clarification = self.last_logger_clarification
 
         # ✅ Pasang disini
-        clarification = self.validate_logger_clarification(clarification)
+        clarification = self.normalize_logger_list_from_history(clarification)
+        # print(f"clarification yang baru : {clarification}")
 
         if clarification:
             print(f"✅ Klarifikasi valid ditemukan: {clarification}")
@@ -361,6 +403,21 @@ class PromptProcessedMemory:
             matches = re.findall(pattern, history_text)
             candidates = [m for m in matches if any(t in m for t in logger_types)]
             print("matches :", matches)
+            print("candidates :", candidates,"Panjang data adalah", len(candidates))
+
+            if len(candidates) >= 2:
+                print(f"Panjang dari kandidat adalah {len(candidates)}")
+                candidates = self.normalize_logger_list_from_history(candidates)
+
+                clarification = {
+                    "ambiguous_input": "logger sebelumnya",
+                    "candidates": candidates
+                }
+                self.last_logger_clarification = clarification
+                print("✅ Klarifikasi berhasil diambil dari response_history:", clarification)
+            else:
+                print("❌ [GAGAL] Merubah kandidat logger dari response_history.")
+                return None
 
             if len(candidates) == 2:
                 clarification = {
@@ -709,7 +766,7 @@ class PromptProcessedMemory:
                     suggestions = [l for l in normalized_valid_loggers if stripped_norm in l]
                     print(f"⚠️ Logger ambigu '{stripped_norm}' — Saran eksplisit: {suggestions}")
                 else:
-                    n_suggestions = min(normalized_counter.get(stripped_norm, 2), 3)
+                    n_suggestions = min(normalized_counter.get(stripped_norm, 1), 3)
                     suggestions = get_close_matches(norm, normalized_valid_loggers, n=n_suggestions, cutoff=0.7)
                     print(f"📌 Saran fuzzy match: {suggestions}")
 
@@ -768,7 +825,6 @@ class PromptProcessedMemory:
                 print("🗓️ Deteksi tanggal (relatif):", self.last_date)
                 break
 
-
     def _should_use_memory(self, prompt: str) -> bool:
         print("_should_use_memory telah berjalan HEHE")
         prompt = prompt.lower()
@@ -801,7 +857,6 @@ class PromptProcessedMemory:
         self.last_logger_list = logger_list
         self.last_logger_source = source
         print(f"[MEMORY] last_logger_list diupdate dari source '{source}': {logger_list}")
-
 
     def update_last_logger_list_from_response(self, response_text: str):
         import re
