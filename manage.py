@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from transformers import BertTokenizer, BertForSequenceClassification
 import torch
 import joblib
-from super_tools import sensor_aliases,get_logger_info, search_logger_info
+from super_tools import sensor_aliases,get_logger_info, search_logger_info,original_fetch_data_range_async
 from difflib import get_close_matches
 from flask import Flask, request, jsonify
 from typing import List, Dict, Tuple
@@ -405,24 +405,6 @@ class PromptProcessedMemory:
             print("matches :", matches)
             print("candidates :", candidates,"Panjang data adalah", len(candidates))
 
-            if len(candidates) > 2:
-                print(f"Panjang dari kandidat adalah {len(candidates)}")
-                candidates = self.normalize_logger_list_from_history(candidates)
-                if candidates == None:
-                    print("❌ Tidak ditemukan kandidat logger dari response_history.")
-                    return None
-                else: 
-                    clarification = {
-                        "ambiguous_input": "logger sebelumnya",
-                        "candidates": candidates
-                    }
-                self.last_logger_clarification = clarification
-                print("✅ Klarifikasi berhasil diambil dari response_history:", clarification)
-                # ✅ Klarifikasi berhasil diambil dari response_history: {'ambiguous_input': 'logger sebelumnya', 'candidates': None}
-            else:
-                print("❌ [GAGAL] Merubah kandidat logger dari response_history.")
-                return None
-
             if len(candidates) == 2:
                 clarification = {
                     "ambiguous_input": "logger sebelumnya",
@@ -430,10 +412,26 @@ class PromptProcessedMemory:
                 }
                 self.last_logger_clarification = clarification
                 print("✅ Klarifikasi berhasil diambil dari response_history:", clarification)
+
+            elif len(candidates) > 2:
+                print(f"🔁 Panjang dari kandidat adalah {len(candidates)}")
+                candidates = self.normalize_logger_list_from_history(candidates)
+
+                if candidates is None or len(candidates) < 2:
+                    print("❌ Tidak ditemukan kandidat logger yang valid setelah normalisasi.")
+                    return None
+
+                clarification = {
+                    "ambiguous_input": "logger sebelumnya",
+                    "candidates": candidates
+                }
+                self.last_logger_clarification = clarification
+                print("✅ Klarifikasi berhasil diambil dari response_history setelah normalisasi:", clarification)
+
             else:
-                print("❌ Tidak ditemukan kandidat logger dari response_history.")
+                print("❌ Tidak cukup kandidat untuk klarifikasi.")
                 return None
-            
+
         print(f"⚠️ last_logger_clarification : {clarification}")
         candidates = clarification.get("candidates", [])
         ambiguous_input = clarification.get("ambiguous_input", "")
@@ -715,20 +713,20 @@ class PromptProcessedMemory:
             from collections import Counter
             stripped_names = [name.replace("pos ", "").strip() for name in logger_names_from_db]
             normalized_counter = Counter(stripped_names)
+            print(f"normalized_counter adalah {normalized_counter}")
         except Exception as e:
             print("❌ [ERROR] fetch_list_logger gagal:", e)
             normalized_valid_loggers = set()
             normalized_counter = {}
-
-        logger_pattern = r"\b(?:logger|pos|afmr|awlr|awr|arr|adr|awqr|avwr|awgc)\s+(?:[a-z]{3,}(?:\s+[a-z]{3,}){0,3})"
+        logger_pattern = r"\b(?:data|logger|pos|afmr|awlr|awr|arr|adr|awqr|avwr|awgc)\s+(?:[a-z]{3,}(?:\s+[a-z]{3,}){0,3})"
         raw_matches = re.findall(logger_pattern, combined_text)
         print(f"🔍 logger_match (raw): {raw_matches}")
 
         expanded_matches = self._clean_logger_list(raw_matches)
 
-        print("🧩 expanded_matches (awal):", expanded_matches)
+        print("🧩 expanded_matches (awal):", expanded_matches) 
 
-        if any(keyword in expanded_matches for keyword in ["kali bawang", "sapon"]):
+        if any(keyword in expanded_matches for keyword in ["kali bawang", "sapon"]): 
             print("⚠️ Deteksi kata eksplisit 'kali bawang' atau 'sapon' — token overlap dilewati")
         else:
             print("🔄 Mencoba pencocokan dengan token overlap...")
@@ -756,7 +754,8 @@ class PromptProcessedMemory:
         cleaned_matches = set()
         self.logger_suggestions = {}
         self.last_logger_clarification = None
-
+        
+        ambiguous_keywords = {"sapon", "kali bawang"}
         for match in expanded_matches:
             filtered = " ".join(word for word in match.split() if word.lower() not in stopwords)
             norm = normalize_logger_name(filtered)
@@ -765,11 +764,18 @@ class PromptProcessedMemory:
             if norm in normalized_valid_loggers:
                 cleaned_matches.add(norm)
             else:
-                stripped_norm = norm.replace("pos ", "").strip()
-                if stripped_norm in {"sapon", "kali bawang"}:
-                    suggestions = [l for l in normalized_valid_loggers if stripped_norm in l]
-                    print(f"⚠️ Logger ambigu '{stripped_norm}' — Saran eksplisit: {suggestions}")
-                else:
+                stripped_norm = norm.replace("pos ", "").strip().lower()
+
+                # Deteksi apakah nama logger mengandung kata ambigu eksplisit
+                ambiguous_detected = False
+                for keyword in ambiguous_keywords:
+                    if keyword in stripped_norm:
+                        suggestions = [l for l in normalized_valid_loggers if keyword in l]
+                        ambiguous_detected = True
+                        print(f"⚠️ Logger ambigu mengandung '{keyword}' — Saran eksplisit: {suggestions}")
+                        break
+
+                if not ambiguous_detected:
                     n_suggestions = min(normalized_counter.get(stripped_norm, 1), 3)
                     suggestions = get_close_matches(norm, normalized_valid_loggers, n=n_suggestions, cutoff=0.7)
                     print(f"📌 Saran fuzzy match: {suggestions}")
@@ -786,10 +792,57 @@ class PromptProcessedMemory:
 
                 print(f"⚠️ Tidak valid: {norm} — Saran: {suggestions}")
 
+        # for match in expanded_matches: # ['pos sapon'] masuk ke logger ambigu, ['data sapon'] tidak masuk ke logger ambigu
+        #     filtered = " ".join(word for word in match.split() if word.lower() not in stopwords)
+        #     norm = normalize_logger_name(filtered)
+        #     print(f"🧹 filtered: {filtered} → norm: {norm}") # 🧹 filtered: pos sapon → norm: pos sapon, 🧹 filtered: data sapon → norm: pos data sapon
+
+        #     if norm in normalized_valid_loggers:
+        #         cleaned_matches.add(norm)
+        #     else:
+        #         stripped_norm = norm.replace("pos ", "").strip().lower()
+        #         if stripped_norm in {"sapon", "kali bawang"}:
+        #             suggestions = [l for l in normalized_valid_loggers if stripped_norm in l]
+        #             print(f"⚠️ Logger ambigu '{stripped_norm}' — Saran eksplisit: {suggestions}") # ⚠️ Logger ambigu 'sapon' — Saran eksplisit: ['pos arr sapon', 'pos awlr sapon']
+        #         else:
+        #             n_suggestions = min(normalized_counter.get(stripped_norm, 1), 3)
+        #             suggestions = get_close_matches(norm, normalized_valid_loggers, n=n_suggestions, cutoff=0.7)
+        #             print(f"📌 Saran fuzzy match: {suggestions}")
+
+        #         if suggestions:
+        #             self.logger_suggestions[norm] = suggestions
+
+        #             if len(suggestions) == 2:
+        #                 self.last_logger_clarification = {
+        #                     "ambiguous_input": norm,
+        #                     "candidates": suggestions
+        #                 }
+        #                 print("📌 last_logger_clarification disimpan:", self.last_logger_clarification)
+
+        #         print(f"⚠️ Tidak valid: {norm} — Saran: {suggestions}")
+
         if self.last_logger_clarification:
             self.last_logger_list = []
             self.last_logger = None
             print("🛑 Logger dikosongkan karena menunggu klarifikasi dari user")
+        # elif cleaned_matches:
+        #     print("cleaned_matches :", cleaned_matches)
+        #     print("panjang cleaned_matches", len(cleaned_matches))
+
+        #     if self.last_logger_clarification or len(cleaned_matches) > 1:
+        #         self.last_logger_list = list(cleaned_matches)
+        #         self.last_logger = None
+        #         print("⚠️ Logger valid ditemukan lebih dari satu — menunggu klarifikasi")
+        #         self.last_logger_clarification = {
+        #             "ambiguous_input": self.latest_prompt,
+        #             "candidates": self.last_logger_list
+        #         }
+        #     else:
+        #         self.last_logger_list = list(cleaned_matches)
+        #         self.last_logger = self.last_logger_list[0]
+        #         print("📌 last_logger_list:", self.last_logger_list)
+        #         print("📌 last_logger (terakhir):", self.last_logger)
+
         elif cleaned_matches:
             print("cleaned_matches :",cleaned_matches)
             print("panjang cleaned_matches", len(cleaned_matches))
@@ -967,6 +1020,41 @@ class PromptProcessedMemory:
         print("⚠️ Klarifikasi tidak dikenali.")
         return None
 
+    def extract_date_keywords_or_relative(self, text: str) -> str:
+        """
+        Deteksi frasa waktu eksplisit dan relatif dari teks.
+        Jika ditemukan, simpan ke self.last_date dan return string hasilnya.
+        """
+        combined_text = text.lower().strip()
+
+        # 1. Pola waktu relatif
+        relative_date_patterns = [
+            r"\d+\s+hari\s+(lalu|terakhir)",
+            r"\d+\s+minggu\s+(lalu|terakhir)",
+            r"\d+\s+bulan\s+(lalu|terakhir)",
+            r"\d+\s+tahun\s+(lalu|terakhir)"
+        ]
+        for pattern in relative_date_patterns:
+            match = re.search(pattern, combined_text)
+            if match:
+                self.last_date = match.group(0)
+                print("🗓️ Deteksi tanggal (relatif):", self.last_date)
+                return self.last_date
+
+        # 2. Kata kunci eksplisit
+        date_keywords = [
+            "hari ini", "kemarin", "kemaren", "minggu ini", "minggu lalu",
+            "bulan lalu", "awal bulan", "akhir bulan", "tahun lalu",
+            "minggu terakhir", "bulan terakhir", "hari terakhir"
+        ]
+        for phrase in date_keywords:
+            if phrase in combined_text:
+                self.last_date = phrase
+                print("🗓️ Deteksi tanggal (keyword):", phrase)
+                return phrase
+
+        print("❌ Tidak ada kata kunci tanggal terdeteksi.")
+        return None
     # def handle_dual_logger_selection(self):
     #     print("handle_dual_logger_selection sedang berjalan....")
     #     """
@@ -1012,99 +1100,30 @@ class PromptProcessedMemory:
     #     print("⚠️ Klarifikasi tidak dikenali.")
     #     return None
     
-    def handle_confirmation_prompt_if_needed_v2(self, user_reply: str) -> Optional[Dict]:
-        print("🔍 func handle_confirmation_prompt_if_needed_v2 sedang berjalan....")
-        print(f"🗣 latest prompt adalah : {user_reply}")
-
-        CONFIRM_YES_SYNONYMS = {
-            # Karakter ekspresif/random
-            "?", "??", "???", "????", "!", "!!", "!!!", "!!!!", "!!!!!", "...", "....", "......","ya",
-            # Variasi dasar & pertanyaan
-            "ya", "iya", "iya?", "iya!", "iya?!", "betul", "betul?", "benar", "benar?", "bener", "bener?",
-            "betool", "betool?", "betool!!", "betool!", "benerrr", "benerrrr!","boleh","yaa","yaaa","yaaaa",
-            # Variasi informal dan slang
-            "yoi", "yap", "y", "yo", "sip", "ok", "oke", "okey", "yes", "yess", "yesss", "you bet", "yosh", "yoa", "yo’i",
-            # Tambahan penekanan/emosi
-            "ya dong", "iya deh", "iya banget", "iya lah", "iyalah", "iyalah sayang", "iyaa", "iyaa dong", "iyaa!", "iyap", 
-            "yes dong", "yes lah", "yes banget", "yes yes!",
-            # Kata penegasan atau afirmatif
-            "udah pasti", "jelas", "jelas banget", "pastinya", "tentu", "tentu saja", "pasti", "pastilah", "bener banget",
-            # Chat slang/kasual + ekspresi acak
-            "gas", "cus", "gass", "gasss", "gaskeun", "mantap", "mantul", "sip deh", "sippp", "sippp!", "sipppp", "siap", "siap!", 
-            "go!", "ayoo!", "ayok", "hayuk", "lanjut", "langsung aja", "okedeh", "ok sip", "ok gas", "langsung gas",
-            # Emoji & kombinasi
-            "ya 👍", "oke 👍", "sip 👍", "yoi 💪", "yes ✅", "betul ✅", "iyes ✅", "mantap 🔥", "sippp 🔥", "cus 💨", "gaspol 🔥",
-            # Tambahan karakter random dan ekspresi lebih bebas
-            "iyaa~", "iyaaa", "iyaaa!!", "iyaa bgt", "iyes!", "okeee", "oke deh~", "yes!", "yeees", "yeeees!", "yaaaa",
-            "gaskeun!", "gasskan!", "gasskeun dong", "mantab!", "mantabb!", "mantabb banget!", "langsungkeun!", "yappp", "yaaa gpp",
-            # Tambahan dari permintaan
-            "ya dua-duanya", "dua-duanya", "keduanya", "dua duanya", "ya keduanya", "ya dua duanya", "kedua duanya",
-        }
-
-        prompt = user_reply.strip().lower()
-        print("prompt",prompt)
-        clarification = self.last_logger_clarification
-
-        if not clarification:
-            print("❌ Tidak ada data klarifikasi.")
+    def extract_previous_prompt_for_reclassification(self, history: list) -> str:
+        """
+        Ambil prompt user sebelum klarifikasi logger jika formatnya:
+        user → assistant → user (misal: 'keduanya')
+        """
+        if not history or len(history) < 3:
+            print("⚠️ Chat history terlalu pendek.")
             return None
 
-        candidates = clarification.get("candidates", [])
-        ambiguous_input = clarification.get("ambiguous_input", "")
-        if len(candidates) != 2:
-            print("❌ Jumlah kandidat tidak sesuai.")
-            return None
+        # Ambil 3 pesan terakhir
+        last_user = history[-1]
+        assistant_before = history[-2]
+        user_before_that = history[-3]
 
-        norm_cand_1 = candidates[0].lower()
-        norm_cand_2 = candidates[1].lower()
+        if (
+            last_user.get("role") == "user"
+            and assistant_before.get("role") == "assistant"
+            and user_before_that.get("role") == "user"
+        ):
+            print(f"🧠 Klasifikasi ulang menggunakan prompt sebelumnya: {user_before_that['content']}")
+            return user_before_that["content"]
 
-        # Case 1: pilih dua-duanya
-        if any(kw in prompt for kw in {"keduanya", "dua-duanya", "ya keduanya", "ya dua-duanya"}):
-            print("✅ User memilih dua kandidat.")
-            return {
-                "prompt": user_reply,
-                "ambiguous_input": ambiguous_input,
-                "confirmed": True,
-                "logger": [candidates[0], candidates[1]]
-            }
-
-        # Case 2: user menyebut salah satu kandidat secara eksplisit
-        for cand in [norm_cand_1, norm_cand_2]:
-            if cand in prompt:
-                selected = candidates[0] if cand == norm_cand_1 else candidates[1]
-                print(f"✅ User menyebutkan kandidat eksplisit: {selected}")
-                return {
-                    "prompt": user_reply,
-                    "ambiguous_input": ambiguous_input,
-                    "confirmed": True,
-                    "logger": selected
-                }
-
-        # Case 3: user menyebutkan sebagian nama logger
-        for cand in candidates:
-            cand_tokens = set(cand.lower().split())
-            if any(token in prompt.split() for token in cand_tokens):
-                print(f"✅ Token logger ditemukan dalam prompt: {cand}")
-                return {
-                    "prompt": user_reply,
-                    "ambiguous_input": ambiguous_input,
-                    "confirmed": True,
-                    "logger": cand
-                }
-
-        # Case 4: default afirmatif ke dua kandidat
-        if prompt in CONFIRM_YES_SYNONYMS or any(affirm in prompt for affirm in CONFIRM_YES_SYNONYMS):
-            print("🟡 Jawaban afirmatif, default ke dua kandidat.")
-            return {
-                "prompt": user_reply,
-                "ambiguous_input": ambiguous_input,
-                "confirmed": True,
-                "logger": candidates
-            }
-
-        print("⚠️ Tidak bisa mengenali klarifikasi.")
+        print("⚠️ Format 3 pesan terakhir tidak sesuai untuk klasifikasi ulang.")
         return None
-
 
 
     def process_new_prompt(self, new_prompt: str) -> Dict:
@@ -1119,7 +1138,7 @@ class PromptProcessedMemory:
 
         self.latest_prompt = new_prompt
         self.prompt_history.append(new_prompt)
-        self.last_date = None
+        self.last_date = None  # reset date saat proses baru
 
         print("\nnew_prompt di function process_new_prompt", new_prompt)
         print(f"\nIntent di function procces_new_prompt adalah : {self.intent}")
@@ -1127,15 +1146,41 @@ class PromptProcessedMemory:
         print(f"\nIntent terakhir adalah : {self.prev_intent}")
 
         # ✅ Jika new_prompt adalah hasil konfirmasi
-        
         if isinstance(new_prompt, dict) and new_prompt.get("confirmed") is True:
             confirmed_logger = new_prompt["logger"]
             self.latest_prompt = new_prompt.get("prompt", "")
             self.last_logger_list = confirmed_logger if isinstance(confirmed_logger, list) else [confirmed_logger]
             self.last_logger = self.last_logger_list[0]
             self.last_logger_clarification = None
-            self.prev_intent = self.prev_intent
-            self.intent = self.intent
+
+            # 🔁 Ambil prompt sebelumnya untuk referensi tanggal
+            prev_prompt = self.extract_previous_prompt_for_reclassification(user_messages)
+
+            # 🧠 Jika intent belum ada → klasifikasi intent
+            if self.intent is None:
+                if prev_prompt:
+                    predicted_intent = self._predict_intent_bert(prev_prompt)
+                    self.intent = predicted_intent
+                    self.prev_intent = predicted_intent
+                    print(f"🔁 Intent diklasifikasi ulang berdasarkan prompt sebelumnya: {predicted_intent}")
+                else:
+                    print("⚠️ Tidak ditemukan prompt sebelumnya untuk klasifikasi ulang.")
+
+            # 📅 Isi tanggal jika intent mengandung _by_date dan belum ada tanggal
+            if (self.intent and self.intent.endswith("_by_date") and self.last_date is None) or (
+                self.intent in ["fetch_logger_by_date", "analyze_logger_by_date", "compare_logger_by_date"]
+                and self.last_date is None
+            ):
+                if prev_prompt:
+                    extracted_date = self.extract_date_keywords_or_relative(prev_prompt)
+                    if extracted_date:
+                        print(f"📅 Tanggal berhasil diekstrak dari prompt sebelumnya: {extracted_date}")
+                        self.last_date = extracted_date
+                    else:
+                        print("⚠️ Tidak berhasil ekstrak tanggal dari prompt sebelumnya.")
+                else:
+                    print("⚠️ Tidak ada prev_prompt untuk ekstraksi tanggal.")
+
             target = self.last_logger_list
 
             print("🎯 Prompt hasil klarifikasi — langsung return.")
@@ -1147,18 +1192,20 @@ class PromptProcessedMemory:
                 "latest_prompt": self.latest_prompt,
                 "logger_suggestions": self.logger_suggestions
             }
-        
+
+        # ✅ Jika tidak ada klarifikasi, coba deteksi prompt ambigu
         clarification_response = self.handle_confirmation_prompt_if_needed(self.latest_prompt)
-        print("clarification_response adalah",clarification_response)
+        print("clarification_response adalah", clarification_response)
         if clarification_response:
             return clarification_response
 
+        # ✅ Lanjutkan dengan proses normal (intent langsung terdeteksi)
         print("new_prompt adalah :", new_prompt)
         self._extract_context_memory(text=new_prompt)
         print("func _extract_context_memory telah selesai berjalan !")
         print(f"Prompt terbaru setelah _extract_context_memory adalah {self.latest_prompt}")
         print(f"self.last_logger adalah ini : {self.last_logger}")
-        print(f"LIST dari self.last_logger adalah ini : {self.last_logger_list}") # jika sudah ada ini
+        print(f"LIST dari self.last_logger adalah ini : {self.last_logger_list}")
 
         print(f"\n Intent baru {self.intent} dan intent lama adalah {self.prev_intent}")
         print(f"Intent Sebelumnya {self.prev_intent}, target sebelumnya {self.prev_target}, waktu sebelumnya {self.prev_date}")
@@ -1506,6 +1553,7 @@ class PromptProcessedMemory:
 
 import warnings
 warnings.filterwarnings('ignore')
+import asyncio
 import torch
 import re
 from transformers import BertTokenizer, BertForSequenceClassification
@@ -1649,7 +1697,7 @@ class IntentManager:
         print("Intent Sebelumnya :", self.memory.prev_intent)
         prompt = self.memory.latest_prompt.lower()
         intent = self.memory.intent
-        # target_loggers = [self.memory.last_logger]
+        # target_loggers = [self.memory.last_logger] 
         target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
         logger_list = fetch_list_logger()
 
@@ -1894,12 +1942,14 @@ class IntentManager:
     #     return f"Berhasil mengambil data terbaru dari {len(fetched)} logger."
     
     def fetch_data_range(self):
-        print("fetch_logger_by_date ini telah berjalan")
+        print("fetch_logger_by_date ini telah berjalan") # fetch_logger_by_date ini telah berjalan
         model_name = "llama3.1:8b"
         prompt = self.memory.latest_prompt
-        print("prompt", prompt)
+        date = self.memory.last_date
+        print("prompt", prompt) # prompt ya
         target_loggers = self.memory.last_logger_list or [self.memory.last_logger]
-        print("target_loggers", target_loggers)
+        print("target_loggers", target_loggers) # target_loggers ['Pos ARR Sapon', 'Pos AWLR Sapon']
+        print("Tanggal adalah : ",date) # Tanggal adalah :  2 hari terakhir
 
         def generate_return_response(user_prompt: str, fallback_message: str) -> str:
             # Ambil struktur: judul, bullet list, dan format markdown dari user_prompt
@@ -1935,12 +1985,11 @@ class IntentManager:
         logger_list = fetch_list_logger()
 
         # === Ekstraksi tanggal dari prompt
-        date_info = extract_date_structured(prompt)
+        date_info = extract_date_structured(date)
         print("date_info", date_info)
         if date_info.get("awal_tanggal") == [None]:
             print("Mohon maaf, tanggal yang Anda masukkan belum dapat dikenali. Silakan berikan tanggal secara lengkap dengan format tahun-bulan-tanggal")
         
-
         # Simpan tanggal ke memory
         if date_info.get("awal_tanggal") or date_info.get("akhir_tanggal"):
             self.memory.last_date = f"{date_info.get('awal_tanggal')} s/d {date_info.get('akhir_tanggal')}"
@@ -1953,15 +2002,24 @@ class IntentManager:
                 if alias in prompt:
                     matched_parameters.append(param)
                     break
+
+        print(f"Type Data dari : {type(date_info)}")
         print("matched_parameters:", matched_parameters)
 
         # === Ambil data dari original fetch
         fetched_data = original_fetch_data_range(
-            prompt=prompt,
+            date_info = date_info,
             target_loggers=target_loggers,
             matched_parameters=matched_parameters,
             logger_list=logger_list
         )
+        # fetched_data = asyncio.run( original_fetch_data_range_async(
+        #         date_info=date_info,
+        #         target_loggers=target_loggers,
+        #         matched_parameters=matched_parameters,
+        #         logger_list=logger_list
+        #     )
+        # )
         # print(f"target_loggers {target_loggers.values}")
         #  Oper ke LLM
         summaries = []
@@ -2403,72 +2461,251 @@ class IntentManager:
             return hasil
         else:
             return "Prompt tidak mengandung kata kunci koneksi seperti aktif, offline, signal, dll."
+        
 
     def ai_limitation(self):
-        print("func ai_limitation telah berjalan untuk merespon di luar cakupan")
+        """
+        Fungsi untuk membatasi jawaban model agar hanya dalam konteks STESY.
+        Menggunakan prompt terakhir dan riwayat chat dari self.memory.
+        """
+        print("🔒 func ai_limitation dijalankan untuk membatasi respons ke konteks telemetri")
         model_name = "llama3.1:8b"
+        prompt = self.memory.latest_prompt or ""
+        print(f":: Prompt: {prompt}")
 
-        # Ambil prompt terakhir dari user
-        prompt = self.memory.latest_prompt
-        print(f"Latest prompt: {prompt}")
+        # 1. Prompt sistem yang diperkuat
+        messages_llm = [
+            {
+                "role": "system",
+                "content": (
+                    "Anda adalah STESY, AI virtual assistant untuk Smart Telemetry Systems (STESY).\n\n"
+                    "Anda **hanya** menjawab pertanyaan yang terkait dengan topik-topik berikut:\n"
+                    "- Telemetri\n- Hidrologi\n- Sungai\n- Cuaca\n- Klimatologi\n- Analisis data logger STESY\n\n"
+                    "Jika pertanyaan **di luar konteks** (contohnya tentang teori fisika, sejarah, AI, matematika, atau lainnya), "
+                    "tolak dengan sopan dan jelas. Jangan jawab isinya, tapi sampaikan penolakan secara singkat, walaupun Anda tahu jawabannya.\n\n"
+                    "Topik yang harus **DITOLAK** meliputi:\n"
+                    "- Fisika, Kimia, Matematika, Biologi, Sejarah, Teknologi Umum, Kesehatan, Agama, dll\n\n"
+                    "Jawab HANYA jika pertanyaan berkaitan langsung dengan:\n"
+                    "- Lokasi pos logger STESY\n- Data suhu, curah hujan, kelembaban, tekanan, angin\n"
+                    "- Perbandingan dan evaluasi parameter logger\n- Cuaca lokal dan kondisi sungai berdasarkan logger\n\n"
+                    "Contoh jawaban penolakan:\n"
+                    "🙏 Maaf, saya hanya bisa menjawab topik terkait data telemetri dan lingkungan. Silakan ajukan pertanyaan lain dalam konteks tersebut.\n"
+                )
+            }
+        ]
 
-        # 🔍 Jika tidak ada target maupun tanggal → arahkan user dengan bantuan LLM
-        if not self.memory.last_logger and not self.memory.last_date:
-            print("⚠️ Tidak ditemukan nama logger maupun tanggal — arahkan user dengan contoh pertanyaan.")
+        # 2. Ambil history terakhir dari memori
+        chat_history = self.memory.get_context_window(window_size=4) or []
+        print(f"📜 Chat history: {chat_history}")
+        print(f"Panjang data dari chat_history adalah : {len(chat_history)}")
+        messages_llm.extend(chat_history)
 
-            messages_llm = [
-                {
-                    "role": "system",
-                    "content": (
-                        f"Anda adalah STESY, AI assistant untuk Smart Telemetry Systems.\n"
-                        f"Jika pengguna tidak menyebutkan nama pos maupun tanggal, bantu arahkan dengan sopan.\n"
-                        f"Berikan contoh pertanyaan, gunakan markdown dan emoji jika perlu."
-                    )
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        f"Pengguna hanya memberikan permintaan umum seperti 'tampilkan datanya', 'saya ingin lihat info', tanpa nama pos atau tanggal.\n\n"
-                        f"Berikut adalah contoh pertanyaan yang sesuai:\n"
-                        f"1. Tampilkan suhu udara di Pos ARR Gemawang kemarin.\n"
-                        f"2. Bagaimana kondisi kelembaban di AWLR Kaliurang minggu lalu?\n"
-                        f"3. Di mana pos dengan curah hujan tertinggi hari ini?"
-                    )
-                }
-            ]
+        # Tambahkan prompt user
+        messages_llm.append({"role": "user", "content": prompt})
 
+        print(f"Type data dari messages_llm adalah : {type(messages_llm)}")
+        print(f"Panjang data dari messages_llm adalah : {len(messages_llm)}")
+
+        # 3. Jalankan model dengan seluruh konteks
+        try:
             response = chat(model=model_name, messages=messages_llm)
-            return response["message"]["content"]
+            content = response.get("message", {}).get("content", "")
+            print(f"jenis response adalah : {response}")
+            print(f"📜 response Chat: {content}")
+            content = (content or "").strip()
+            print(f"Content adalah : {content}")
 
-        # Jika target atau tanggal ada, tetap gunakan konteks dari chat history
-        full_history = self.memory.get_context_window(window_size=4)
-        print(f"📜 Chat history untuk ai_limitation: {full_history}")
+            # 🔐 Fallback jika content kosong
+            if not content:
+                print("⚠️   Model tidak memberikan respons. Fallback digunakan.")
+                fallback_text = (
+                    "📌 *Sistem STESY hanya menjawab dalam konteks berikut:*\n"
+                    "- Telemetri\n- Hidrologi\n- Sungai\n- Cuaca\n- Klimatologi\n- Analisis data logger\n\n"
+                    "🙏 *Pertanyaan Anda tampaknya di luar topik tersebut.*\n"
+                    "Silakan ajukan pertanyaan yang relevan dengan sistem telemetri atau lingkungan. 🌿"
+                )
+                cont = f"{fallback_text}\n\n{prompt}"
+                formatted_response = general_stesy(
+                    [{"role": "user", "content": cont}], 
+                    model_name=model_name
+                )
+                return formatted_response
 
-        messages_llm = [{
-            "role": "system",
-            "content": (
-                "Anda adalah STESY, AI virtual assistant untuk Smart Telemetry Systems.\n"
-                "Anda hanya menjawab pertanyaan tentang:\n"
-                "- Telemetri\n- Hidrologi\n- Sungai\n- Cuaca\n- Klimatologi\n- Analisis data logger\n\n"
-                "Jika pertanyaan tidak relevan atau ambigu, jawab dengan sopan dan arahkan pengguna.\n"
-                "Jika pengguna hanya mengucapkan 'ok', 'terima kasih', atau 'iya', cukup balas ringkas dan ramah."
+            return content
+
+        except Exception as e:
+            print(f"❌ Terjadi error saat menjalankan model: {e}")
+            return (
+                "⚠️ Sistem STESY mengalami gangguan saat menjawab pertanyaan Anda. "
+                "Pastikan pertanyaan Anda sesuai topik seperti data logger atau cuaca."
             )
-        }]
+    # def ai_limitation(self):
+    #     """
+    #     Fungsi untuk membatasi jawaban model agar hanya dalam konteks STESY.
+    #     Menggunakan prompt terakhir dan riwayat chat dari self.memory.
+    #     """
+    #     print("🔒 func ai_limitation dijalankan untuk membatasi respons ke konteks telemetri")
+    #     model_name = "llama3.1:8b"
+    #     prompt = self.memory.latest_prompt
+    #     print(f":: Prompt: {prompt}")
+        
+    #     # 1. Prompt sistem yang diperkuat
+    #     messages_llm = [
+    #         {
+    #             "role": "system",
+    #             "content": (
+    #                 "Anda adalah STESY, AI virtual assistant untuk Smart Telemetry Systems (STESY).\n\n"
+    #                 "Anda **hanya** menjawab pertanyaan yang terkait dengan topik-topik berikut:\n"
+    #                 "- Telemetri\n"
+    #                 "- Hidrologi\n"
+    #                 "- Sungai\n"
+    #                 "- Cuaca\n"
+    #                 "- Klimatologi\n"
+    #                 "- Analisis data logger STESY\n\n"
+    #                 "Jika pertanyaan **di luar konteks**(contohnya tentang teori fisika, sejarah, AI, matematika, atau lainnya), tolak dengan sopan dan jelas. Jangan jawab isinya, tapi sampaikan penolakan secara singkat, walaupun Anda tahu jawabannya.\n\n"
+    #                 "Topik yang harus **DITOLAK** meliputi (namun tidak terbatas pada):\n"
+    #                 "- Fisika (teori Archimedes, hukum Newton, dll)\n"
+    #                 "- Kimia (reaksi, unsur, senyawa, tabel periodik)\n"
+    #                 "- Matematika (aljabar, kalkulus, statistik, geometri)\n"
+    #                 "- Biologi (anatomi, sistem organ, klasifikasi makhluk hidup)\n"
+    #                 "- Geografi umum (benua, geologi, pegunungan, iklim dunia)\n"
+    #                 "- Sejarah & tokoh sejarah\n"
+    #                 "- Teknologi umum & komputer\n"
+    #                 "- Kesehatan & medis\n"
+    #                 "- Agama, etika, filsafat\n"
+    #                 "- Ekonomi, politik, hukum\n"
+    #                 "- Hiburan (film, musik, novel, anime)\n"
+    #                 "- Pendidikan, tips belajar, psikologi\n\n"
+    #                 "Jawab HANYA jika pertanyaan berkaitan langsung dengan:\n"
+    #                 "- Lokasi pos logger STESY\n"
+    #                 "- Data suhu, curah hujan, kelembaban, tekanan, angin\n"
+    #                 "- Perbandingan dan evaluasi parameter logger\n"
+    #                 "- Cuaca lokal dan kondisi sungai berdasarkan logger\n\n"
+    #                 "Contoh pertanyaan yang valid:\n"
+    #                 "- \"Berikan suhu udara di pos ARR Sapon kemarin\"\n"
+    #                 "- \"Bandingkan curah hujan di pos Beji dan pos Tegal\"\n"
+    #                 "- \"Bagaimana analisis tekanan udara minggu lalu di ARR Kaliurang\"\n\n"
+    #                 "Contoh pertanyaan yang harus ditolak:\n"
+    #                 "- \"Apa itu teori Archimedes?\"\n"
+    #                 "- \"Siapa presiden Indonesia pertama?\"\n"
+    #                 "- \"Berapa 7 dikali 8?\"\n\n"
+    #                 "Contoh jawaban penolakan:\n"
+    #                 "\"🙏 Maaf, saya hanya bisa menjawab topik terkait data telemetri dan lingkungan. Silakan ajukan pertanyaan lain dalam konteks tersebut.\"\n"
+    #             )
+    #         }
+    #     ]
 
-        # Tambahkan history user + asisten (jika ada)
-        for msg in full_history:
-            messages_llm.append({
-                "role": msg["role"],
-                "content": msg["content"]
-            })
+    #     # 2. Ambil history terakhir dari memori
+    #     chat_history = self.memory.get_context_window(window_size=4)
+    #     print(f"📜 Chat history: {chat_history}")
+    #     print(f"Panjang data dari chat_history adalah : {len(chat_history)}")
+    #     messages_llm.extend(chat_history)
+        
+    #     print(f"Type data dari messages_llm adalah : {type(messages_llm)}")
+    #     print(f"Panjang data dari messages_llm adalah : {len(messages_llm)}")
 
-        # Tambahkan prompt terbaru jika belum ada
-        if not any(m["content"] == prompt for m in messages_llm if m["role"] == "user"):
-            messages_llm.append({"role": "user", "content": prompt})
+    #     # 3. Jalankan model dengan seluruh konteks
+    #     try:
+    #         response = chat(model=model_name, messages=messages_llm)
+            
+    #         content = response.get("message", {}).get("content", "").strip()
+    #         print(f"jenis response adalah : {response}")
+    #         print(f"📜 response Chat: {response.get('message', {}).get('content', '')}")
+    #         print(f"Content adalah : {content}")
 
-        # Kirim ke LLaMA
-        response = chat(model=model_name, messages=messages_llm)
-        return response["message"]["content"]
+
+    #         # 🔐 Fallback jika content kosong
+    #         if not content:
+    #             print("⚠️   Model tidak memberikan respons. Fallback digunakan.")
+
+    #             fallback_text = (
+    #                 "📌 *Sistem STESY hanya menjawab dalam konteks berikut:*\n"
+    #                 "- Telemetri\n- Hidrologi\n- Sungai\n- Cuaca\n- Klimatologi\n- Analisis data logger\n\n"
+    #                 "🙏 *Pertanyaan Anda tampaknya di luar topik tersebut.*\n"
+    #                 "Silakan ajukan pertanyaan yang relevan dengan sistem telemetri atau lingkungan. 🌿"
+    #             )
+    #             cont = fallback_text + "\n\n" + prompt 
+    #             # 🔁 Kirim fallback_text ke LLM agar diformat lebih alami
+    #             formatted_response = general_stesy(
+    #                 [{"role": "user", "content": cont}], 
+    #                 model_name=model_name
+    #             )
+    #             return formatted_response
+
+    #     except Exception as e:
+    #         print(f"❌ Terjadi error saat menjalankan model: {e}")
+    #         return (
+    #             "⚠️ Sistem STESY mengalami gangguan saat menjawab pertanyaan Anda. "
+    #             "Pastikan pertanyaan Anda sesuai topik seperti data logger atau cuaca."
+    #         )
+
+
+
+    # def ai_limitation(self):
+    #     print("func ai_limitation telah berjalan untuk merespon di luar cakupan")
+    #     model_name = "llama3.1:8b"
+
+    #     # Ambil prompt terakhir dari user
+    #     prompt = self.memory.latest_prompt
+    #     print(f"Latest prompt: {prompt}")
+
+    #     # 🔍 Jika tidak ada target maupun tanggal → arahkan user dengan bantuan LLM
+    #     if not self.memory.last_logger and not self.memory.last_date:
+    #         print("⚠️ Tidak ditemukan nama logger maupun tanggal — arahkan user dengan contoh pertanyaan.")
+
+    #         messages_llm = [
+    #             {
+    #                 "role": "system",
+    #                 "content": (
+    #                     f"Anda adalah STESY, AI assistant untuk Smart Telemetry Systems.\n"
+    #                     f"Jika pengguna tidak menyebutkan nama pos maupun tanggal, bantu arahkan dengan sopan.\n"
+    #                     f"Berikan contoh pertanyaan, gunakan markdown dan emoji jika perlu."
+    #                 )
+    #             },
+    #             {
+    #                 "role": "user",
+    #                 "content": (
+    #                     f"Pengguna hanya memberikan permintaan umum seperti 'tampilkan datanya', 'saya ingin lihat info', tanpa nama pos atau tanggal.\n\n"
+    #                     f"Berikut adalah contoh pertanyaan yang sesuai:\n"
+    #                     f"1. Tampilkan suhu udara di Pos ARR Gemawang kemarin.\n"
+    #                     f"2. Bagaimana kondisi kelembaban di AWLR Kaliurang minggu lalu?\n"
+    #                     f"3. Di mana pos dengan curah hujan tertinggi hari ini?"
+    #                 )
+    #             }
+    #         ]
+
+    #         response = chat(model=model_name, messages=messages_llm)
+    #         return response["message"]["content"]
+
+    #     # Jika target atau tanggal ada, tetap gunakan konteks dari chat history
+    #     full_history = self.memory.get_context_window(window_size=4)
+    #     print(f"📜 Chat history untuk ai_limitation: {full_history}")
+
+    #     messages_llm = [{
+    #         "role": "system",
+    #         "content": (
+    #             "Anda adalah STESY, AI virtual assistant untuk Smart Telemetry Systems.\n"
+    #             "Anda hanya menjawab pertanyaan tentang:\n"
+    #             "- Telemetri\n- Hidrologi\n- Sungai\n- Cuaca\n- Klimatologi\n- Analisis data logger\n\n"
+    #             "Jika pertanyaan tidak relevan atau ambigu, jawab dengan sopan dan arahkan pengguna.\n"
+    #             "Jika pengguna hanya mengucapkan 'ok', 'terima kasih', atau 'iya', cukup balas ringkas dan ramah."
+    #         )
+    #     }]
+
+    #     # Tambahkan history user + asisten (jika ada)
+    #     for msg in full_history:
+    #         messages_llm.append({
+    #             "role": msg["role"],
+    #             "content": msg["content"]
+    #         })
+    #     print(f"HEHE ayo masuk {prompt}")
+    #     # Tambahkan prompt terbaru jika belum ada
+    #     if not any(m["content"] == prompt for m in messages_llm if m["role"] == "user"):
+    #         messages_llm.append({"role": "user", "content": prompt})
+
+    #     # Kirim ke LLaMA
+    #     response = chat(model=model_name, messages=messages_llm)
+    #     return response["message"]["content"]
 
     def show_logger_info(self):
         print("Function show_logger_info langsung dijalankan")
@@ -2499,7 +2736,7 @@ class IntentManager:
                     f"Pertanyaan pengguna: {prompt}\n\n"
                     f"Berikut informasi yang tersedia dari sistem:\n\n{get_info}\n\n"
                     "Jika informasi yang diminta tidak ditemukan dalam data di atas, jawab dengan:\n"
-                    f"\"Maaf, saya tidak menemukan informasi mengenai '{prompt}' dalam data yang diberikan.\"\n\n"
+                    f"\"Maaf, saya tidak menemukan informasi mengenai '{prompt}' dalam database.\"\n\n"
                     "Jika informasi tersedia, berikan jawaban langsung berdasarkan data tersebut."
                 )
             }

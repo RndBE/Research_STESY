@@ -55,6 +55,7 @@ def general_stesy(messages, model_name="llama3.1:8b"):
     }
 
     response = chat(model=model_name, messages=[system_prompt] + messages)
+    print(f"respone adalah {response['message']['content']}")
     return response["message"]["content"]
 
 def original_fetch_status_logger(prompt: str):
@@ -155,13 +156,114 @@ def original_fetch_status_logger(prompt: str):
     return f"Berikut logger di {kabupaten_in_prompt or 'semua kabupaten'} yang sedang hujan:\n" + "\n".join(pos_hujan) if pos_hujan else "Tidak ada logger yang mencatat hujan saat ini."
 
 
-def original_fetch_data_range(prompt: str, target_loggers: list, matched_parameters: list, logger_list: list):
-    print("prompt :", prompt)
-    date_info = extract_date_structured(prompt)
+import aiohttp
+import asyncio
+from rapidfuzz import process, fuzz
+
+import aiohttp
+import asyncio
+from rapidfuzz import process, fuzz
+
+async def original_fetch_data_range_async(date_info, target_loggers, matched_parameters, logger_list):
     interval = date_info.get("interval")
     start_date = date_info.get("awal_tanggal")
     end_date = date_info.get("akhir_tanggal")
-    print("date_info", date_info)
+    print("🗓️ Date Info:", date_info)
+
+    if not interval or not start_date or not end_date:
+        return "Tanggal tidak dikenali dalam prompt."
+
+    def normalize(text):
+        return text.lower().replace("pos", "").replace("logger", "").strip()
+
+    normalized_choices = {
+        normalize(logger['nama_lokasi']): logger for logger in logger_list
+    }
+    all_logger_names = list(normalized_choices.keys())
+    tasks = []
+
+    async def fetch_logger_data(session, logger):
+        logger_id = logger['id_logger']
+        logger_name = logger['nama_lokasi']
+        url = (
+            f"https://dpupesdm.monitoring4system.com/api/data_range"
+            f"?id_logger={logger_id}&interval={interval}"
+            f"&awal={start_date}&akhir={end_date}"
+        )
+        print(f"[FETCH RANGE] {logger_name} → {url}")
+        try:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=20)) as resp:
+                content_type = resp.headers.get("Content-Type", "")
+                if "application/json" not in content_type:
+                    raise ValueError(f"Invalid Content-Type: {content_type}")
+
+                data = await resp.json()
+
+                if isinstance(data, list) and data:
+                    if matched_parameters:
+                        filtered_data = []
+                        for entry in data:
+                            filtered_entry = {
+                                k: v for k, v in entry.items()
+                                if k in matched_parameters or k.lower() in ["id_logger", "waktu"]
+                            }
+                            filtered_data.append(filtered_entry)
+                        return logger_name, filtered_data
+                    return logger_name, data
+        except Exception as e:
+            print(f"[ERROR] Gagal fetch data untuk {logger_name}: {e}")
+        return logger_name, []
+
+    async with aiohttp.ClientSession() as session:
+        for name_fragment in target_loggers:
+            query = normalize(name_fragment)
+            fuzzy_results = process.extract(query, all_logger_names, scorer=fuzz.token_set_ratio, limit=1)
+
+            print(f"\n[DEBUG] Fuzzy match for: '{name_fragment}'")
+            for r in fuzzy_results:
+                print(f"Match: {r[0]} | Score: {r[1]}")
+            print("==============================")
+
+            if not fuzzy_results or fuzzy_results[0][1] < 40:
+                continue
+
+            best_match = fuzzy_results[0][0]
+            matched_logger = normalized_choices.get(best_match)
+
+            if matched_logger:
+                tasks.append(fetch_logger_data(session, matched_logger))
+
+        results = await asyncio.gather(*tasks)
+
+    combined_data = {name: data for name, data in results if data}
+    if combined_data:
+        print("✅ Data berhasil diambil:", list(combined_data.keys()))
+        return combined_data
+    else:
+        print("[INFO] Data tidak ditemukan, tidak menyimpan ke memory")
+        return "Tidak ditemukan data yang cocok untuk logger yang dimaksud."
+
+
+def original_fetch_data_range(date_info, target_loggers: list, matched_parameters: list, logger_list: list):
+    
+    # ⛑️ Cek dan konversi jika date_info bukan dict
+    # if isinstance(date_info, str):
+    #     try:
+    #         import json
+    #         date_info = json.loads(date_info)  # jika string adalah JSON
+    #     except Exception as e:
+    #         print("❌ Gagal parsing date_info string:", e)
+    #         return "Format date_info tidak valid. Harus dictionary."
+
+    # if not isinstance(date_info, dict):
+    #     print("❌ Tipe date_info tidak didukung:", type(date_info))
+    #     return "Format date_info tidak valid."
+    
+    print(f"Type Data dari {type(date_info)}")
+    interval = date_info.get("interval")
+    start_date = date_info.get("awal_tanggal")
+    end_date = date_info.get("akhir_tanggal")
+    print("🗓️ Date Info:", date_info)
 
     if not interval or not start_date or not end_date:
         return "Tanggal tidak dikenali dalam prompt."
@@ -175,6 +277,7 @@ def original_fetch_data_range(prompt: str, target_loggers: list, matched_paramet
     }
     all_logger_names = list(normalized_choices.keys())
     # summaries = [] 
+    all_data = []
 
     for name_fragment in target_loggers:
         query = normalize(name_fragment)
@@ -203,33 +306,34 @@ def original_fetch_data_range(prompt: str, target_loggers: list, matched_paramet
                 print(f"[FETCH RANGE] {logger_name} → {url}")
                 resp = requests.get(url, timeout=20)
                 resp.raise_for_status()
-                data = resp.json()
+                logger_data = resp.json()
 
-                if isinstance(data, list) and data:
-                    # === Filter parameter jika tersedia
+                if isinstance(logger_data, list) and logger_data:
                     if matched_parameters:
                         filtered_data = []
-                        for entry in data:
+                        for entry in logger_data:
                             filtered_entry = {
                                 k: v for k, v in entry.items()
                                 if k in matched_parameters or k.lower() in ["id_logger", "waktu"]
                             }
                             filtered_data.append(filtered_entry)
-                        data = filtered_data
+                        logger_data = filtered_data
 
-                    # ✅ Simpan ke summary
-                    # summary = summarize_logger_data(logger_name, data)
-                    # summaries.append(data)
+                    # ✅ Simpan per-logger
+                    all_data.append({
+                        "logger": logger_name,
+                        "data": logger_data
+                    })
 
             except Exception as e:
                 print(f"[ERROR] Gagal fetch data untuk {logger_name}: {e}")
-
     # 🔚 Return hasil
-    if data:
-        print("fetched data adalah :", data)
-        return data
+    if all_data:
+        print("fetched data adalah :", all_data)
+        return all_data
     else:
         return "Tidak ditemukan data yang cocok untuk logger yang dimaksud."
+
 
 
 # def original_fetch_data_range(prompt: str, target_loggers: list, matched_parameters: list, logger_list: list ):
